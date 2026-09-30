@@ -274,9 +274,18 @@ static bool SariaRupeeGame_IsComplete() {
 
 // The seal exists while the mod is on, the Kokiri Sword has not been collected yet and the trial
 // has not been beaten on this save file.
+// The fairy's favor, from the Fairy's Favor enhancement, opens the same way to the Kokiri Sword
+// that this minigame guards. When it has been given the seal is lifted, so the song is an
+// alternative route rather than something the player has to beat the rupee game to use.
+static bool SariaRupeeGame_SealLiftedByFairy() {
+    return CVarGetInteger(CVAR_ENHANCEMENT("FairyFavor.Enabled"), 0) &&
+           CVarGetInteger(CVAR_ENHANCEMENT("FairyFavor.UnsealSwordChest"), 1) &&
+           Flags_GetInfTable(INFTABLE_FAIRY_FAVOR);
+}
+
 static bool SariaRupeeGame_ShouldSealExist() {
     return SariaRupeeGame_IsEnabled() && !LINK_IS_ADULT && !SariaRupeeGame_IsComplete() &&
-           !Flags_GetTreasure(gPlayState, SARIA_GAME_CHEST_FLAG);
+           !Flags_GetTreasure(gPlayState, SARIA_GAME_CHEST_FLAG) && !SariaRupeeGame_SealLiftedByFairy();
 }
 
 static Actor* SariaRupeeGame_FindKokiriSwordChest(PlayState* play) {

@@ -1892,6 +1892,75 @@ void SohMenu::AddMenuEnhancements() {
                      .Tooltip("How far ahead of Link Lilith appears inside the Deku Tree. She is placed on\n"
                               "validated floor, so raise this if she ends up somewhere awkward."));
 
+    AddWidget(path, "The Fairy's Favor", WIDGET_SEPARATOR_TEXT);
+    auto fairyFavorDisabledFunc = [](WidgetInfo& info) {
+        info.options->disabled = !CVarGetInteger(CVAR_ENHANCEMENT("FairyFavor.Enabled"), 0);
+        info.options->disabledTooltip = "This option is disabled because \"Enable the Fairy's Favor\" is turned off.";
+    };
+    AddWidget(path, "Enable the Fairy's Favor##FairyFavor", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("FairyFavor.Enabled"))
+        .PreFunc([](WidgetInfo& info) {
+            info.options->disabled = IS_RANDO;
+            info.options->disabledTooltip = "This enhancement is not available while playing a Randomizer.";
+        })
+        .Options(CheckboxOptions().Tooltip(
+            "Play C-Up C-Up C-Right C-Right C-Down C-Down A on the ocarina as a child to call a fairy.\n"
+            "Her favor opens the way to the Kokiri Sword, and makes the Deku Shield free in the Kokiri\n"
+            "Shop. The shopkeeper notices soon after, and comes to collect."));
+    AddWidget(path, "Favor lifts the seal on the sword chest##FairyFavor", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("FairyFavor.UnsealSwordChest"))
+        .PreFunc(fairyFavorDisabledFunc)
+        .Options(CheckboxOptions().DefaultValue(1).Tooltip(
+            "With this on, the fairy's favor unseals the Kokiri Sword chest that Saria's Silver Rupee Trial\n"
+            "guards, so the song is another route to the sword rather than a reason to skip the trial."));
+    AddWidget(path, "Deku Shield is free with the fairy's favor##FairyFavor", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("FairyFavor.FreeDekuShield"))
+        .PreFunc(fairyFavorDisabledFunc)
+        .Options(CheckboxOptions().DefaultValue(1).Tooltip(
+            "The Kokiri Shop lets Link walk out with the Deku Shield once the fairy has given her favor.\n"
+            "He pays for it a little later, one way or another."));
+    AddWidget(path, "What the shopkeeper charges##FairyFavor", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("FairyFavor.ShieldDebt"))
+        .PreFunc(fairyFavorDisabledFunc)
+        .Options(IntSliderOptions()
+                     .Min(1)
+                     .Max(200)
+                     .DefaultValue(40)
+                     .Format("%d rupees")
+                     .Tooltip("How much the shopkeeper takes when he catches up with Link. If Link cannot\n"
+                              "cover it, the shield goes back on the shelf instead."));
+    AddWidget(path, "How long before he notices##FairyFavor", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("FairyFavor.DebtDelaySeconds"))
+        .PreFunc(fairyFavorDisabledFunc)
+        .Options(IntSliderOptions()
+                     .Min(0)
+                     .Max(30)
+                     .DefaultValue(4)
+                     .Format("%d seconds")
+                     .Tooltip("How long Link gets to enjoy the shield before the shopkeeper comes looking.\n"
+                              "The debt is remembered, so leaving the shop only postpones it."));
+
+    AddWidget(path, "Sprint", WIDGET_SEPARATOR_TEXT);
+    auto sprintDisabledFunc = [](WidgetInfo& info) {
+        info.options->disabled = !CVarGetInteger(CVAR_ENHANCEMENT("Sprint.Enabled"), 0);
+        info.options->disabledTooltip = "This option is disabled because \"Enable Sprint\" is turned off.";
+    };
+    AddWidget(path, "Enable Sprint##Sprint", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Sprint.Enabled"))
+        .Options(CheckboxOptions().Tooltip(
+            "Hold a button to run faster while Link is on his feet and moving. Does not apply while\n"
+            "swimming, crawling, riding Epona, or Z-targeting an enemy."));
+    AddWidget(path, "Sprint Button##Sprint", WIDGET_CVAR_BTN_SELECTOR)
+        .CVar(CVAR_ENHANCEMENT("Sprint.Button"))
+        .PreFunc(sprintDisabledFunc)
+        .Options(BtnSelectorOptions().DefaultValue(BTN_CUSTOM_MODIFIER1).Tooltip("Hold this combination to sprint."));
+    AddWidget(path, "Sprint Speed: %.2fx##Sprint", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar(CVAR_ENHANCEMENT("Sprint.SpeedMultiplier"))
+        .PreFunc(sprintDisabledFunc)
+        .Options(FloatSliderOptions().Min(1.0f).Max(3.0f).DefaultValue(1.5f).Format("%.2fx").Tooltip(
+            "How much faster Link runs while sprinting. Stacks with the Speed Modifier\n"
+            "cheat if that is turned on as well."));
+
     // Extra Modes
     path.sidebarName = "Extra Modes";
     AddSidebarEntry("Enhancements", path.sidebarName, 3);
