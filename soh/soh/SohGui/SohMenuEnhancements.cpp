@@ -1,4 +1,4 @@
-﻿#include "SohMenu.h"
+#include "SohMenu.h"
 #include <soh/Enhancements/enhancementTypes.h>
 #include "soh/Enhancements/SwitchAge.h"
 #include "soh/Enhancements/AdultMasks.h"
@@ -1810,6 +1810,52 @@ void SohMenu::AddMenuEnhancements() {
     AddWidget(path, "Horseback Archery", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_ENHANCEMENT("HorsebackArcheryBothPrizes"))
         .Options(CheckboxOptions().Tooltip("Link can win both Horseback Archery prizes in one attempt"));
+
+    AddWidget(path, "Saria's Silver Rupee Trial", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Enable Trial##SariaRupeeGame", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("SariaRupeeGame.Enabled"))
+        .PreFunc([](WidgetInfo& info) {
+            info.options->disabled = IS_RANDO;
+            info.options->disabledTooltip = "This minigame is not available while playing a Randomizer.";
+        })
+        .Options(CheckboxOptions().Tooltip(
+            "Saria seals the chamber that holds the Kokiri Sword until Link collects enough silver rupees\n"
+            "in Kokiri Forest. Talk to Saria, or to the seal in front of the chest, to start the challenge.\n\n"
+            "Completing the trial is remembered per save file, and files that already opened the Kokiri Sword\n"
+            "chest are left alone."));
+    auto sariaRupeeGameDisabledFunc = [](WidgetInfo& info) {
+        info.options->disabled = !CVarGetInteger(CVAR_ENHANCEMENT("SariaRupeeGame.Enabled"), 0);
+        info.options->disabledTooltip = "This option is disabled because \"Enable Trial\" is turned off.";
+    };
+    AddWidget(path, "Silver Rupees to Collect: %d rupees", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("SariaRupeeGame.RupeeCount"))
+        .PreFunc(sariaRupeeGameDisabledFunc)
+        .Options(IntSliderOptions()
+                     .Min(3)
+                     .Max(30)
+                     .DefaultValue(10)
+                     .Format("%d rupees")
+                     .Tooltip("How many silver rupees Saria asks for. Applied the next time the trial starts."));
+    AddWidget(path, "Rupee Search Radius: %d units", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("SariaRupeeGame.SearchRadius"))
+        .PreFunc(sariaRupeeGameDisabledFunc)
+        .Options(IntSliderOptions()
+                     .Min(200)
+                     .Max(2000)
+                     .DefaultValue(600)
+                     .Format("%d units")
+                     .Tooltip("How far from Saria the silver rupees can be scattered when the trial starts."));
+    AddWidget(path, "Seal Size: %d units", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("SariaRupeeGame.SealSize"))
+        .PreFunc(sariaRupeeGameDisabledFunc)
+        .Options(
+            IntSliderOptions()
+                .Min(60)
+                .Max(400)
+                .DefaultValue(150)
+                .Format("%d units")
+                .Tooltip("Size of the magic seal covering the Kokiri Sword chest. Increase it if Link can still reach "
+                         "the chest."));
 
     // Extra Modes
     path.sidebarName = "Extra Modes";

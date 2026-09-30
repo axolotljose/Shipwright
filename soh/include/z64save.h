@@ -902,6 +902,7 @@ typedef enum {
 // 0x1D0-0x1DF
 #define INFTABLE_1DX_INDEX 29
 #define INFTABLE_SWORDLESS 0x1D0
+#define INFTABLE_SARIA_RUPEE_GAME 0x1D1
 
 
 /*
