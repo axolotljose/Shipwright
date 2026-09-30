@@ -1857,6 +1857,41 @@ void SohMenu::AddMenuEnhancements() {
                 .Tooltip("Size of the magic seal covering the Kokiri Sword chest. Increase it if Link can still reach "
                          "the chest."));
 
+    AddWidget(path, "Lilith, the White Rose Princess", WIDGET_SEPARATOR_TEXT);
+    auto lilithTrialDisabledFunc = [](WidgetInfo& info) {
+        info.options->disabled = !CVarGetInteger(CVAR_ENHANCEMENT("Lilith.Enabled"), 0);
+        info.options->disabledTooltip = "This option is disabled because \"Enable Lilith's Trial\" is turned off.";
+    };
+    AddWidget(path, "Enable Lilith's Trial##LilithWhiteRose", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_ENHANCEMENT("Lilith.Enabled"))
+        .PreFunc([](WidgetInfo& info) {
+            info.options->disabled = IS_RANDO;
+            info.options->disabledTooltip = "This quest is not available while playing a Randomizer.";
+        })
+        .Options(CheckboxOptions().Tooltip(
+            "Lilith waits inside the Deku Tree and challenges Link to defeat a wave of enemies outside\n"
+            "without falling. Clear it and she blesses the Kokiri Sword, then disappears for good."));
+    AddWidget(path, "Lilith Enemy Count##LilithWhiteRose", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Lilith.EnemyCount"))
+        .PreFunc(lilithTrialDisabledFunc)
+        .Options(IntSliderOptions()
+                     .Min(3)
+                     .Max(10)
+                     .DefaultValue(6)
+                     .Format("%d enemies")
+                     .Tooltip("How many monsters the forest sends. Deku Babas, Skulltulas, Tektites, Torch\n"
+                              "Slugs and Biris, easiest first. Applies the next time the trial starts."));
+    AddWidget(path, "Lilith Spawn Distance##LilithWhiteRose", WIDGET_CVAR_SLIDER_INT)
+        .CVar(CVAR_ENHANCEMENT("Lilith.SpawnDistance"))
+        .PreFunc(lilithTrialDisabledFunc)
+        .Options(IntSliderOptions()
+                     .Min(100)
+                     .Max(400)
+                     .DefaultValue(200)
+                     .Format("%d units")
+                     .Tooltip("How far ahead of Link Lilith appears inside the Deku Tree. She is placed on\n"
+                              "validated floor, so raise this if she ends up somewhere awkward."));
+
     // Extra Modes
     path.sidebarName = "Extra Modes";
     AddSidebarEntry("Enhancements", path.sidebarName, 3);
