@@ -72,10 +72,20 @@ enum LilithCutscene {
     LILITH_CS_VICTORY,
 };
 
+enum LilithTalkPhase {
+    LILITH_TALK_IDLE,
+    LILITH_TALK_GREET_OPEN,
+    LILITH_TALK_OFFER_OPEN,
+    LILITH_TALK_CONFIRM_OPEN,
+    LILITH_TALK_REMINDER_OPEN,
+};
+
 struct LilithState {
-    LilithCutscene playingCs = LILITH_CS_NONE;
+    LilithCutscene pendingCs = LILITH_CS_NONE; // asked for, waiting for the engine to be free
+    LilithCutscene playingCs = LILITH_CS_NONE; // trigger set, running or about to run
     bool csStarted = false;
-    int32_t csWaitFrames = 0;
+    int32_t csFrames = 0;
+    bool offerShown = false;
     bool challengeAccepted = false;
     bool waveSpawned = false;
     int32_t waveRemaining = 0;
@@ -97,36 +107,54 @@ static bool Lilith_IsTrialComplete() {
     return Flags_GetInfTable(INFTABLE_LILITH_TRIAL_COMPLETE);
 }
 
-// Starts a hand authored cutscene. The engine picks the trigger up on the following frame in
-// func_80068ECC, which is why the caller then waits for csCtx.state to return to IDLE.
-static void Lilith_PlayCutscene(PlayState* play, LilithCutscene which) {
-    CutsceneData* script = nullptr;
+/**
+ * Cutscene handling.
+ *
+ * Cutscenes are requested rather than started on the spot, because the two moments this mod
+ * wants one (the player closing a textbox, the wave being cleared) are exactly when the engine
+ * is not ready: Player_SetupTalk sets PLAYER_STATE1_IN_CUTSCENE for the whole talk, so
+ * Player_InCsMode is true while Link is still leaving the talk animation. A request is retried
+ * each frame until the engine frees up, and dropped after LILITH_CS_START_TIMEOUT frames, so a
+ * cutscene that cannot start can never cost the player control of Link.
+ */
+#define LILITH_CS_START_TIMEOUT 90
+#define LILITH_CS_RUN_TIMEOUT 3000
 
+static CutsceneData* Lilith_CutsceneScript(LilithCutscene which) {
     switch (which) {
         case LILITH_CS_INTRO:
-            script = gLilithIntroCs;
-            break;
+            return gLilithIntroCs;
         case LILITH_CS_ACCEPT:
-            script = gLilithAcceptCs;
-            break;
+            return gLilithAcceptCs;
         case LILITH_CS_VICTORY:
-            script = gLilithVictoryCs;
-            break;
+            return gLilithVictoryCs;
         default:
-            return;
+            return NULL;
     }
+}
 
-    if (play->csCtx.state != CS_STATE_IDLE || Player_InCsMode(play)) {
+static void Lilith_RequestCutscene(LilithCutscene which) {
+    sState.pendingCs = which;
+    sState.csFrames = 0;
+}
+
+// Lets go of a cutscene this mod started. Clearing cutsceneIndex moves the engine onto
+// sCsStateHandlers1, where CS_STATE_UNSKIPPABLE_INIT is the slot that restores the camera and
+// walks the state machine back to idle (func_80068D84), so this ends it the same way the
+// scripts' own terminator does instead of leaving the camera behind.
+static void Lilith_AbortCutscene(PlayState* play) {
+    if (sState.playingCs == LILITH_CS_NONE) {
         return;
     }
 
-    play->csCtx.segment = script;
-    gSaveContext.cutsceneTrigger = 1;
-    sState.playingCs = which;
-    sState.csStarted = false;
-    sState.csWaitFrames = 0;
+    gSaveContext.cutsceneIndex = 0;
+    gSaveContext.cutsceneTrigger = 0;
+    play->csCtx.state = CS_STATE_UNSKIPPABLE_INIT;
+    Audio_SetCutsceneFlag(0);
 }
 
+// Quest bookkeeping for a cutscene that is over, whether it played to its terminator or was
+// released early. Nothing the quest needs lives in a script, so skipping one is harmless.
 static void Lilith_FinishCutscene() {
     switch (sState.playingCs) {
         case LILITH_CS_INTRO:
@@ -144,25 +172,63 @@ static void Lilith_FinishCutscene() {
             break;
     }
     sState.playingCs = LILITH_CS_NONE;
+    sState.csStarted = false;
+    sState.csFrames = 0;
 }
 
-// The engine flips csCtx.state out of IDLE a frame or two after the trigger is set, so a
-// cutscene is only treated as finished once it has actually been seen running. The frame
-// timeout keeps a trigger that never took off (another cutscene won) from hanging the quest.
-static bool Lilith_UpdateCutscene(PlayState* play) {
-    if (sState.playingCs == LILITH_CS_NONE) {
-        return false;
+static void Lilith_UpdateCutscene(PlayState* play) {
+    if (sState.playingCs != LILITH_CS_NONE) {
+        sState.csFrames++;
+
+        if (play->csCtx.state != CS_STATE_IDLE) {
+            sState.csStarted = true;
+        } else if (sState.csStarted) {
+            // The script ran its terminator and the engine came back to idle on its own.
+            Lilith_FinishCutscene();
+            return;
+        } else if (sState.csFrames > LILITH_CS_START_TIMEOUT) {
+            // The trigger never took off: a scene change happened, or another cutscene won the
+            // frame. The quest bookkeeping for every scene is applied when it is requested, so
+            // dropping it here costs nothing but the camera move.
+            sState.playingCs = LILITH_CS_NONE;
+            sState.csStarted = false;
+            sState.csFrames = 0;
+            return;
+        }
+
+        // A script that outlives its own terminator would hold Link in cutscene mode forever,
+        // since Cutscene_Command_Terminator only fires on an exact frame match.
+        if (sState.csStarted && sState.csFrames > LILITH_CS_RUN_TIMEOUT) {
+            Lilith_AbortCutscene(play);
+            Lilith_FinishCutscene();
+        }
+        return;
     }
 
-    if (play->csCtx.state != CS_STATE_IDLE) {
-        sState.csStarted = true;
-    } else if (sState.csStarted || ++sState.csWaitFrames > 20) {
+    if (sState.pendingCs == LILITH_CS_NONE) {
+        return;
+    }
+
+    sState.csFrames++;
+
+    CutsceneData* script = Lilith_CutsceneScript(sState.pendingCs);
+    if (script == NULL) {
+        sState.pendingCs = LILITH_CS_NONE;
+        return;
+    }
+
+    if (play->csCtx.state == CS_STATE_IDLE && !Player_InCsMode(play) && play->msgCtx.msgMode == MSGMODE_NONE) {
+        play->csCtx.segment = script;
+        gSaveContext.cutsceneTrigger = 1;
+        sState.playingCs = sState.pendingCs;
+        sState.pendingCs = LILITH_CS_NONE;
         sState.csStarted = false;
-        sState.csWaitFrames = 0;
-        Lilith_FinishCutscene();
+        sState.csFrames = 0;
+    } else if (sState.csFrames > LILITH_CS_START_TIMEOUT) {
+        // The engine never freed up. The quest carries on without the scene.
+        sState.pendingCs = LILITH_CS_NONE;
+        sState.csFrames = 0;
     }
-
-    return true;
 }
 
 // endregion
@@ -202,51 +268,67 @@ static void LilithNpc_Update(Actor* actor, PlayState* play) {
 
     SkelAnime_Update(&self->skelAnime);
 
-    // A cutscene owns the camera and the input while it runs.
-    if (sState.playingCs != LILITH_CS_NONE) {
+    // A cutscene owns the camera and the input while it runs, and a requested one is about to.
+    if (sState.playingCs != LILITH_CS_NONE || sState.pendingCs != LILITH_CS_NONE) {
         return;
     }
 
-    // Waiting for Link to close the trial offer, which is what starts the trial.
-    if (self->talkPhase == 3) {
-        if (play->msgCtx.msgMode == MSGMODE_NONE) {
-            self->talkPhase = 0;
-            sState.challengeAccepted = true;
-            Lilith_PlayCutscene(play, LILITH_CS_ACCEPT);
+    if (self->talkPhase == LILITH_TALK_IDLE) {
+        if (Actor_ProcessTalkRequest(actor, play)) {
+            /**
+             * A talk request must be answered with a textbox, every time, right here.
+             *
+             * Actor_ProcessTalkRequest only clears ACTOR_FLAG_TALK, and Player_SetupTalk opens a
+             * box on its own only when actor.textId is set. Player_Action_Talk then keeps Link
+             * locked in the talk animation, with PLAYER_STATE1_TALKING set and no input read,
+             * until Message_GetState reaches TEXT_STATE_CLOSING. Consume the request without
+             * opening anything and he never moves again.
+             */
+            if (!Flags_GetInfTable(INFTABLE_LILITH_MET)) {
+                self->talkPhase = LILITH_TALK_GREET_OPEN;
+                Message_StartTextbox(play, TEXT_LILITH_GREET, actor);
+            } else if (sState.challengeAccepted) {
+                self->talkPhase = LILITH_TALK_REMINDER_OPEN;
+                Message_StartTextbox(play, TEXT_LILITH_REMINDER, actor);
+            } else if (sState.offerShown) {
+                self->talkPhase = LILITH_TALK_CONFIRM_OPEN;
+                Message_StartTextbox(play, TEXT_LILITH_CONFIRM, actor);
+            } else {
+                self->talkPhase = LILITH_TALK_OFFER_OPEN;
+                Message_StartTextbox(play, TEXT_LILITH_OFFER, actor);
+            }
+        } else {
+            Actor_OfferTalk(actor, play, LILITH_TALK_RANGE);
         }
         return;
     }
 
-    // Any other dialogue has exclusive control while it is up.
+    // The box owns the screen until it is closed, and Link only comes back with it.
     if (play->msgCtx.msgMode != MSGMODE_NONE) {
         return;
     }
 
-    if (Actor_ProcessTalkRequest(actor, play)) {
-        self->talkPhase = 1;
-        return;
+    switch (self->talkPhase) {
+        case LILITH_TALK_GREET_OPEN:
+            // Set here rather than when the scene ends, so the quest still moves forward if the
+            // cutscene never gets its window.
+            Flags_SetInfTable(INFTABLE_LILITH_MET);
+            Lilith_RequestCutscene(LILITH_CS_INTRO);
+            break;
+        case LILITH_TALK_OFFER_OPEN:
+            // Reading the offer commits to nothing; the next conversation is the one that does.
+            sState.offerShown = true;
+            break;
+        case LILITH_TALK_CONFIRM_OPEN:
+            sState.challengeAccepted = true;
+            sState.offerShown = false;
+            Lilith_RequestCutscene(LILITH_CS_ACCEPT);
+            break;
+        default:
+            break;
     }
 
-    if (self->talkPhase == 1) {
-        self->talkPhase = 2;
-        return;
-    }
-
-    if (self->talkPhase == 2) {
-        self->talkPhase = 0;
-
-        if (!Flags_GetInfTable(INFTABLE_LILITH_MET)) {
-            Lilith_PlayCutscene(play, LILITH_CS_INTRO);
-        } else if (sState.challengeAccepted) {
-            Message_StartTextbox(play, TEXT_LILITH_REMINDER, actor);
-        } else {
-            Message_StartTextbox(play, TEXT_LILITH_OFFER, actor);
-            self->talkPhase = 3;
-        }
-        return;
-    }
-
-    Actor_OfferTalk(actor, play, LILITH_TALK_RANGE);
+    self->talkPhase = LILITH_TALK_IDLE;
 }
 
 static void LilithNpc_Draw(Actor* actor, PlayState* play) {
@@ -471,6 +553,25 @@ static void Lilith_ForgetWave() {
 
 // endregion
 
+/**
+ * Kills Lilith, unless Link is mid conversation with her.
+ *
+ * Player_UpdateCommon keeps player.talkActor alive for as long as the player carries
+ * ACTOR_FLAG_TALK, and Player_Action_Talk dereferences it as the box closes. Actor_Kill frees
+ * the instance at the end of the frame, so killing her out from under an open conversation
+ * would leave that pointer dangling. It is cleared the frame after the talk ends, so this
+ * deferral resolves on its own.
+ */
+static void Lilith_KillSafely(PlayState* play, Actor* lilith) {
+    Player* player = GET_PLAYER(play);
+
+    if (player != NULL && player->talkActor == lilith) {
+        return;
+    }
+
+    Actor_Kill(lilith);
+}
+
 // region trial progress
 
 static void Lilith_CompleteTrial(PlayState* play) {
@@ -518,17 +619,30 @@ static void Lilith_ApplyMessage(uint16_t* textId, bool* loadFromMessageTable, co
     *loadFromMessageTable = false;
 }
 
+static void Lilith_GreetText(uint16_t* textId, bool* loadFromMessageTable) {
+    Lilith_ApplyMessage(textId, loadFromMessageTable,
+                        "You are brave to walk so far into my tree, @.&I am Lilith, princess of the white rose.");
+}
+
+// Shown by the intro cutscene, after the greeting box has closed.
 static void Lilith_IntroText(uint16_t* textId, bool* loadFromMessageTable) {
     Lilith_ApplyMessage(textId, loadFromMessageTable,
-                        "You are brave to walk so far into my tree, @.&I am Lilith, princess of the white rose.&"
-                        "The forest has been waiting for someone&with a sword in their hand.");
+                        "The forest has been waiting a long time for&someone with a sword in their hand.&"
+                        "I am the last of the white rose, and I have&a small thing to ask of you, @.");
 }
 
 static void Lilith_OfferText(uint16_t* textId, bool* loadFromMessageTable) {
     Lilith_ApplyMessage(textId, loadFromMessageTable,
                         "Your Kokiri Sword is honest, but small.&Prove your heart is larger.&"
                         "Step outside my tree and cut down every&monster the forest sends at you.&"
-                        "You may be wounded, but do not fall.&Do this, and the blade will remember it.");
+                        "You may be wounded, but do not fall.&Do this, and the blade will remember it.&"
+                        "Come back to me when you are ready.");
+}
+
+static void Lilith_ConfirmText(uint16_t* textId, bool* loadFromMessageTable) {
+    Lilith_ApplyMessage(textId, loadFromMessageTable,
+                        "Say the word, @, and the forest answers.&Every monster it holds will come at once.&"
+                        "There is no going back from this one.");
 }
 
 static void Lilith_AcceptText(uint16_t* textId, bool* loadFromMessageTable) {
@@ -567,13 +681,16 @@ static void Lilith_OnFrameUpdate() {
         if (inDekuTree) {
             Actor* lilith = Lilith_FindLilith(play);
             if (lilith != NULL) {
-                Actor_Kill(lilith);
+                Lilith_KillSafely(play, lilith);
             }
         }
         if (inKokiri && sState.waveSpawned) {
             Lilith_ClearWave(play);
         }
+        // If the mod is switched off mid scene, hand control back rather than leave Link in it.
+        Lilith_AbortCutscene(play);
         sState.playingCs = LILITH_CS_NONE;
+        sState.pendingCs = LILITH_CS_NONE;
         sState.victoryPending = false;
         return;
     }
@@ -595,7 +712,7 @@ static void Lilith_OnFrameUpdate() {
         } else {
             Actor* lilith = Lilith_FindLilith(play);
             if (lilith != NULL) {
-                Actor_Kill(lilith);
+                Lilith_KillSafely(play, lilith);
             }
         }
     }
@@ -603,7 +720,7 @@ static void Lilith_OnFrameUpdate() {
     if (inKokiri) {
         if (sState.victoryPending) {
             sState.victoryPending = false;
-            Lilith_PlayCutscene(play, LILITH_CS_VICTORY);
+            Lilith_RequestCutscene(LILITH_CS_VICTORY);
             return;
         }
 
@@ -657,8 +774,10 @@ static void Lilith_OnPlayerUpdate(void* actorPtr) {
 }
 
 static void Lilith_RegisterHooks() {
+    COND_ID_HOOK(OnOpenText, TEXT_LILITH_GREET, true, Lilith_GreetText);
     COND_ID_HOOK(OnOpenText, TEXT_LILITH_INTRO, true, Lilith_IntroText);
     COND_ID_HOOK(OnOpenText, TEXT_LILITH_OFFER, true, Lilith_OfferText);
+    COND_ID_HOOK(OnOpenText, TEXT_LILITH_CONFIRM, true, Lilith_ConfirmText);
     COND_ID_HOOK(OnOpenText, TEXT_LILITH_ACCEPT, true, Lilith_AcceptText);
     COND_ID_HOOK(OnOpenText, TEXT_LILITH_VICTORY, true, Lilith_VictoryText);
     COND_ID_HOOK(OnOpenText, TEXT_LILITH_REMINDER, true, Lilith_ReminderText);

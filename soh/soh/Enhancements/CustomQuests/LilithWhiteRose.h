@@ -18,6 +18,8 @@
 #define TEXT_LILITH_ACCEPT 0x8F22
 #define TEXT_LILITH_VICTORY 0x8F23
 #define TEXT_LILITH_REMINDER 0x8F24
+#define TEXT_LILITH_GREET 0x8F25
+#define TEXT_LILITH_CONFIRM 0x8F26
 
 extern CutsceneData gLilithIntroCs[];
 extern CutsceneData gLilithAcceptCs[];
