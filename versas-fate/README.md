@@ -9,6 +9,33 @@ This folder is a complete, self-contained project: build the archive, copy it
 into `mods/`, play. Everything here runs on Windows with a stock Python 3.9+
 and no `pip install`.
 
+## 0. Windows: the one download that actually builds
+
+**Do not use GitHub's green "Code -> Download ZIP" button on this repo.** It
+leaves the `libultraship/` and `torch/` submodules empty, so CMake stops during
+configure, and the next build dies with
+`MSBUILD : error MSB1009: ALL_BUILD.vcxproj does not exist`.
+
+Grab this instead - it is the whole project *with* both dependencies inside
+(the exact submodule revisions this branch pins):
+
+**https://github.com/axolotljose/Shipwright/raw/arena/01a0f751-shipwright/versas-fate/download/Shipwright-VersasFate-with-dependencies.zip**
+
+1. Download and extract it anywhere (e.g. `C:\Users\me\Downloads\VersasFate`).
+   Keep it off OneDrive and out of `Program Files`.
+2. Double-click `versas-fate\build_it.bat` in the extracted folder.
+3. When it finishes it prints the path to `soh.exe` and has already copied
+   `VersasFate.o2r` into `mods\` next to it. Run that `soh.exe`, pick your ROM,
+   and play the six notes on the ocarina.
+
+If you prefer git, `git clone --recurse-submodules` works too; the bat script
+will also tell you if the dependencies are missing.
+
+> Reminder: the song (and the Saria lesson in Kokiri Forest) live in the C++
+> patch, so they only exist in the build produced by `build_it.bat`. Copying
+> the `.o2r` into a different, unpatched SoH build gives you the Vine Forest,
+> the music and the textures, but not the song or the warp.
+
 ---
 
 ## 1. What is in the box
