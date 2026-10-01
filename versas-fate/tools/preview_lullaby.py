@@ -80,6 +80,21 @@ def silence(seconds):
     return [0.0] * int(seconds * RATE)
 
 
+def count_in(slices=4):
+    """A woodblock-ish tick on beats: the four 1/8 notes of a count-in so you
+    know when to start playing. Higher pitch on the first tick."""
+    samples = []
+    for i in range(slices):
+        freq = 1600.0 if i == 0 else 1100.0
+        n = int(0.045 * RATE)
+        for k in range(n):
+            t = k / float(RATE)
+            env = math.exp(-55.0 * t)
+            samples.append(0.30 * env * math.sin(2.0 * math.pi * freq * t))
+        samples.extend(silence(2 * SLICE - 0.045))
+    return samples
+
+
 def melody(with_clicks=True):
     samples = []
     for midi, slices in zip(LULLABY, ON_SLICES):
@@ -93,21 +108,34 @@ def melody(with_clicks=True):
     return samples
 
 
-def main():
-    track = silence(0.4) + melody() + silence(1.0) + melody() + silence(0.6)
-
-    out_dir = os.path.join(ROOT, "music")
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, "versas_lullaby_preview.wav")
-
+def write_wav(path, samples):
     with wave.open(path, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(RATE)
-        frames = b"".join(struct.pack("<h", int(max(-1.0, min(1.0, s)) * 32000)) for s in track)
+        frames = b"".join(struct.pack("<h", int(max(-1.0, min(1.0, s)) * 32000)) for s in samples)
         w.writeframes(frames)
 
+
+def main():
+    out_dir = os.path.join(ROOT, "music")
+    os.makedirs(out_dir, exist_ok=True)
+
+    # reference: the melody twice, with a tick on each note onset
+    track = silence(0.4) + melody() + silence(1.0) + melody() + silence(0.6)
+    path = os.path.join(out_dir, "versas_lullaby_preview.wav")
+    write_wav(path, track)
     print("wrote %s (%.1f s, %d notes x2)" % (path, len(track) / float(RATE), len(LULLABY)))
+
+    # practice track: count-in, melody, then a gap the same length as the
+    # melody for you to play along, twice
+    gap = silence(len(melody()) / float(RATE))
+    practice = (count_in() + melody() + gap) * 2
+    path = os.path.join(out_dir, "versas_lullaby_practice.wav")
+    write_wav(path, practice)
+    print("wrote %s (%.1f s: 4 ticks, the melody, then your turn - x2)"
+          % (path, len(practice) / float(RATE)))
+
     print("listen, then play:  X, up, down, left, right, X")
 
 

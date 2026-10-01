@@ -8,3 +8,4 @@
 
 # Generated practice audio (tools/preview_lullaby.py) - regenerable, ~900 KB
 music/*_preview.wav
+music/*_practice.wav

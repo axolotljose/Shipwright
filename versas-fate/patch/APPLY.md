@@ -95,14 +95,16 @@ reports - add `"versa_scene"` at the end if you want readable names there.
 the enum's `ENTR_MAX` is `0x614`, directly after it):
 
 ```c
-/* 0x614 */ DEFINE_ENTRANCE(ENTR_VERSAS_FATE, SCENE_VERSAS_FATE, 0, false, false, TRANS_TYPE_FADE_WHITE, TRANS_TYPE_FADE_WHITE)
+/* 0x614 */ DEFINE_ENTRANCE(ENTR_VERSAS_FATE, SCENE_VERSAS_FATE, 0, false, true, TRANS_TYPE_FADE_WHITE, TRANS_TYPE_FADE_WHITE)
 ```
 
 Argument order for the data macro is
 `(enum, sceneId, spawn, continueBgm, displayTitleCard, endTransType, startTransType)`
 (`soh/src/code/z_scene_table.c:32`). `spawn 0` is the spawn point defined by
-`SetStartPositionList` in `versa_scene`, and `displayTitleCard` is `false`
-because the scene has no title card text. If you decide to insert the entry
+`SetStartPositionList` in `versa_scene`, and `displayTitleCard` is `true` -
+the same value every title-less vanilla scene uses (`SCENE_GROTTOS`,
+`SCENE_SYOTES`, `SCENE_TESTROOM`); because the scene's title is `none` the card
+has no text to draw, so nothing appears. If you decide to insert the entry
 somewhere in the middle of the table instead of at the end, then
 `VF_ENTRANCE_INDEX` in `VersasFateWarp.cpp` must be changed to match - the
 default is `0x614`.
