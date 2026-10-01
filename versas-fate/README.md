@@ -1,9 +1,11 @@
 # Versa's Fate
 
-A Ship of Harkinian (SoH) mod that adds a custom ocarina song, *Versa's
-Lullaby*, and a new area, *Versa's Vine Forest*, with enemies, Kokiri, two
-puzzle props, treasure, and a boss arena - shipped as a real `.o2r` archive
-plus one small, clearly delimited C++ file for the song itself.
+A Ship of Harkinian (SoH) mod that adds a new area, *Versa's Vine Forest*
+(enemies, Kokiri, two puzzle props, treasure, a boss arena), three **vine pads**
+that teleport you there from Kokiri Forest, Hyrule Field and Kakariko Village,
+and the custom ocarina song *Versa's Lullaby* as a second way in - shipped as a
+real `.o2r` archive plus one small, clearly delimited C++ file for the pads and
+the song, which an archive cannot contain.
 
 This folder is a complete, self-contained project: build the archive, copy it
 into `mods/`, play. Everything here runs on Windows with a stock Python 3.9+
@@ -26,15 +28,16 @@ Grab this instead - it is the whole project *with* both dependencies inside
 2. Double-click `versas-fate\build_it.bat` in the extracted folder.
 3. When it finishes it prints the path to `soh.exe` and has already copied
    `VersasFate.o2r` into `mods\` next to it. Run that `soh.exe`, pick your ROM,
-   and play the six notes on the ocarina.
+   walk into Kokiri Forest (or Hyrule Field, or Kakariko Village) and step into
+   the ring of vines that is drawn on the ground a few steps in front of you.
 
 If you prefer git, `git clone --recurse-submodules` works too; the bat script
 will also tell you if the dependencies are missing.
 
-> Reminder: the song (and the Saria lesson in Kokiri Forest) live in the C++
+> Reminder: the vine pads, the song and the Saria lesson live in the C++
 > patch, so they only exist in the build produced by `build_it.bat`. Copying
 > the `.o2r` into a different, unpatched SoH build gives you the Vine Forest,
-> the music and the textures, but not the song or the warp.
+> the music and the textures - but nothing that can take you there.
 
 ---
 
@@ -90,9 +93,10 @@ boot and enables any valid `.o2r` it has not seen before, so there is no
 checkbox to tick. If `mods/` does not exist yet, create it - it lives in the
 same folder as `oot.o2r`.
 
-The scene and the music work out of the box. The *song* needs the small C++
-hook, because an archive cannot register a new ocarina song - that is the one
-honest limit of the format, and section 5 tells you exactly what to do.
+The scene and the music work out of the box. Everything that *moves* you -
+the vine pads and the song - needs the small C++ hook, because an archive
+cannot add an object to a vanilla map or register a new ocarina song. That is
+the one honest limit of the format, and section 5 tells you exactly what to do.
 
 ## 3. Installing and testing
 
@@ -111,7 +115,19 @@ Then start the game. Useful things to check:
 |---|---|
 | Game log (`logs/` or the console) | No `Could not find sound font` / `Invalid Sequence` warnings |
 | In-game audio editor (Enhancements → Audio Editor) | Three new entries: "Versas Vine Forest", "Versa Gohma", "Versas Lullaby" |
-| Playing the song | White fade into the vine forest |
+| Walking into Kokiri Forest, Hyrule Field or Kakariko Village | A ring of vines is drawn on the ground in front of you, and a notification says where you are |
+| Standing in the middle of that ring (step off it first) | White fade into the vine forest |
+| Playing A, C-Up, C-Down, C-Left, C-Right, A on the ocarina | Same warp |
+
+**Getting there: the vine pads.** The pads cover the "no song required" case.
+Each of the three areas has one, and it is placed the first time you walk into
+that area while playing: ninety units (two steps) in front of wherever that
+entrance drops Link, so it is always on open ground and always in view. Stand
+in the middle of the ring and you travel; because the pad is right where you
+come back to when you return from the forest, it deliberately ignores you until
+you have taken a step off it and walked back in. The pads do not exist anywhere
+else, do not touch the vanilla map data, and disappear again when you leave the
+area.
 
 **The lesson.** With the ocarina in your inventory, the first time you talk to
 **Saria** (Kokiri Forest early on, or Sacred Forest Meadow where she hands you
@@ -147,12 +163,18 @@ vanilla warp/song at it - or simply apply the hook, which is three edits.
 * **Music**: the room requests `NA_BGM_SARIA_THEME` (audio editor row
   "Lost Woods"), which is the slot you point at "Versas Vine Forest".
 
-## 5. The one C++ file (song detection + warp)
+## 5. The one C++ file (vine pads + song + warp)
 
-`patch/soh/soh/VersasFateWarp.cpp` is 160 lines and does two things: it
-listens on the *existing* `OnOcarinaNote` game-interactor hook for the six
-notes of the song, and it warps to `ENTR_VERSAS_FATE` when they are played in
-order, in free play, without sharps.
+`patch/soh/soh/VersasFateWarp.cpp` is one file and does three things:
+
+* **Draws the vine pads** in Kokiri Forest, Hyrule Field and Kakariko Village
+  from the `OnPlayDrawEnd` hook - a flat mosaic of triangles laid on the
+  ground in the port's "decal" render mode, the same trick SoH's own collision
+  viewer uses, so no object, texture or actor has to exist for it.
+* **Checks whether Link is standing on one** every frame (`OnGameFrameUpdate`)
+  and hands over to the transition system with `ENTR_VERSAS_FATE`.
+* **Listens on the existing `OnOcarinaNote` hook** for the six notes of the
+  song, so playing it also warps - in order, in free play, without sharps.
 
 Three edits, ~5 minutes: `patch/APPLY.md` has the exact lines and the build
 command, and `patch/soh/soh/VersasFateWarp.cpp` is written to be read before
@@ -201,33 +223,41 @@ explains what transcribes well, and the high-fidelity alternative
 These are the things this mod **does not** pretend to do. They are stated here
 so you can plan around them.
 
-1. **A brand new ocarina song cannot live in an `.o2r`.** Song recognition is
-   engine logic, so it needs the file in `patch/`. That is why the patch
-   exists, and it is the *only* code in the mod.
-2. **The song is recognised in free play only.** It deliberately ignores song
+1. **Neither a vine pad nor a new ocarina song can live in an `.o2r`.** A
+   pad is an object in a *vanilla* map, and a map's contents (its actor list)
+   are decided by the game's own scene data - to add an entry, a mod would have
+   to ship a copy of the whole scene, so this mod draws the pad and runs the
+   "stand here" check from code instead. Song recognition is engine logic. Those
+   two things are why the patch exists, and they are the *only* code in the mod.
+2. **The pads are placed relative to the entrance, not at fixed coordinates.**
+   Guessing world coordinates for "open floor" in three different maps, for
+   every entrance into them, is how you end up with a pad inside a wall. They
+   appear a couple of steps in front of wherever the entrance puts Link, which
+   is guaranteed to be walkable ground, and they move with it.
+3. **The song is recognised in free play only.** It deliberately ignores song
    demonstrations, ocarina-spot checks and the scarecrow recording so it can
    never fire while the game is playing notes at you.
-3. **The switches are not wired to a door yet.** The floor switch sets flag
+4. **The switches are not wired to a door yet.** The floor switch sets flag
    `0x0A` and the eye switch `0x0B`; nothing consumes those flags in the
    shipped scene, because a door in a custom room has to be a *transition
    actor* (`Door_Shutter`, `0x2E`) and that list is empty right now.
    `docs/SCENE.md` has the exact XML for it. The two chests are ordinary
    player-opened rewards and work as they are.
-4. **There is one room, and the boss arena is inside it.** There is no boss
+5. **There is one room, and the boss arena is inside it.** There is no boss
    door, no boss-lock cutscene and no separate boss room; the camera in the
    arena is the standard dungeon camera, because `CAM_SET_BOSS_GOHMA` is not
    implemented in this fork (see `docs/SCENE.md`).
-5. **No new models, animations or actors.** Enemies and NPCs are vanilla
+6. **No new models, animations or actors.** Enemies and NPCs are vanilla
    actors placed by id; the forest itself is textured quads generated by
    `tools/make_scene.py`. Importing a Blender mesh is possible (`DisplayList`
    and `Vertex` are text resources) but is not part of this project.
-6. **No new text/messages.** Adding a textbox would mean shipping a `Text`
+7. **No new text/messages.** Adding a textbox would mean shipping a `Text`
    resource and message ids; the mod deliberately avoids that.
-7. **Custom music is note data, not audio.** A `.seq` plays the game's
+8. **Custom music is note data, not audio.** A `.seq` plays the game's
    instruments. There is no supported path to stream an OGG/MP3 as
    background music from a `.o2r`; `docs/CUSTOM_MUSIC.md` explains exactly
    what is possible instead.
-8. **Boss Goma without its vanilla scene.** It fights normally, but the boss
+9. **Boss Goma without its vanilla scene.** It fights normally, but the boss
    health bar, boss music switch and the "boss defeated" cutscene that exist
    in Inside the Deku Tree come from scene/room behaviour and code paths that
    a custom room does not have. The arena is a *fight*, not a boss *encounter

@@ -1,7 +1,8 @@
-# Applying the song-detection / warp hook
+# Applying the vine-pad / song warp hook
 
 Everything in `VersasFate.o2r` works by dropping the archive into `mods/`.
-The **only** thing an archive cannot do is teach the engine a *new song*, so
+The **only** things an archive cannot do are draw a pad inside a vanilla map
+and teach the engine a *new song*, so
 the mod ships one small C++ file that recognises the six ocarina notes of
 "Versa's Lullaby" and warps the player to `ENTR_VERSAS_FATE` when they are
 played. This document is the exact, minimal edit list.
@@ -50,7 +51,9 @@ What the file contains (so you can review it before trusting it):
 * a six-note cursor that only advances while
   `msgCtx.ocarinaAction == OCARINA_ACTION_FREE_PLAY`, ignores releases and
   heavily bent notes, and
-* a warp that closes the ocarina textbox, plays the "song" fanfare and sets
+* the three vine pads (Kokiri Forest, Hyrule Field, Kakariko Village): drawn
+  on the ground from `OnPlayDrawEnd` and triggered from `OnGameFrameUpdate`,
+* a warp that plays the "song" fanfare and sets
   `nextEntranceIndex` / `transitionType` / `transitionTrigger`, which is the
   same sequence `soh/soh/Enhancements/QoL/PauseWarp.cpp` uses for the vanilla
   warp songs.
@@ -145,6 +148,8 @@ If nothing happens:
 |---|---|
 | Crash at boot, "unknown scene" | The scene line is misplaced; it must be before the closing `};` of the enum, i.e. with the other `DEFINE_SCENE` lines. |
 | Warp goes to a black screen / Doodongo's Cavern | The archive did not load. Check the log for `versa_scene`; confirm `mods/VersasFate.o2r` exists and is not zero bytes. |
+| No pad appears | The pad only exists in Kokiri Forest, Hyrule Field and Kakariko Village, and only after the entrance fade has finished. If `soh/soh/VersasFateWarp.cpp` was not copied in before the build, there is no pad at all. |
+| Standing on the pad does nothing | Step off it first: a pad ignores you until you have walked away from it once, so returning from the forest does not bounce you straight back. |
 | Song never triggers | You are probably not in free play (the hook ignores song demonstrations/checks). Also confirm you pressed six notes in the right order, with no extra notes in between. |
 | The fanfare is not the mod's tune | That is expected: see `docs/CUSTOM_MUSIC.md` section 3 for the two-line change that lets the Audio Editor point a fanfare slot at "Versas Lullaby". |
 

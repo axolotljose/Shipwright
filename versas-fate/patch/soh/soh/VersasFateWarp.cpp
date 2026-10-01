@@ -1,62 +1,52 @@
 /**
- * VersasFateWarp.cpp
- * ==================
+ * Versa's Fate - the only C++ this mod needs.
  *
- * The ONLY game-code change the "Versa's Fate" mod needs.
+ * Everything the mod *contains* (the Vine Forest scene, its rooms, its
+ * objects, its six textures, its three music tracks) is data, and it all
+ * lives in VersasFate.o2r: drag the archive into the mods folder and the
+ * engine loads it, no code involved. Three things cannot be done from an
+ * archive, and they are the only three things in this file:
  *
- * Copy this file to:   <soh>/soh/soh/VersasFateWarp.cpp
- * (then append two lines to the scene/entrance tables - see patch/APPLY.md)
+ *   1. THE VINE PADS. OoT scene files decide what exists in a map, and a mod
+ *      cannot append an entry to a *vanilla* scene's actor list without
+ *      shipping a copy of that whole scene. So the pads themselves - a ring
+ *      of vines drawn on the ground, and the "stand on it and travel" check -
+ *      are done here, from the port's per-frame and per-draw hooks. They appear
+ *      in Kokiri Forest, Hyrule Field and Kakariko Village, a couple of steps
+ *      in front of Link wherever he walks into that area, and standing in the
+ *      middle of one takes him to Versa's Vine Forest.
  *
- * It does exactly three things:
- *   1. listens to the notes the player plays on the ocarina (the vanilla
- *      engine only knows its own songs, so a mod's own song has to be
- *      recognised in code),
- *   2. when the six-note melody of "Versa's Lullaby" has just been played,
- *      sends the player through a white fade into the entrance defined by
- *      ENTR_VERSAS_FATE - the entrance you add to
- *      soh/include/tables/entrance_table.h (see patch/APPLY.md), and
- *   3. the first time you talk to Saria - in Kokiri Forest early on, or in
- *      Sacred Forest Meadow where she gives you the ocarina - she sings the
- *      melody: the "an NPC teaches you the song" moment. Any other Kokiri
- *      does it in Kokiri Forest, for saves where Saria has moved on. This is
- *      flavour only: the song is not stored and the warp does not depend on it.
+ *   2. THE SONG. Playing A, C-Up, C-Down, C-Left, C-Right, A on the ocarina
+ *      warps as well. The engine exposes an OnOcarinaNote hook that fires for
+ *      every note, so the melody is matched here rather than by adding a song
+ *      to the vanilla song list (which mods cannot touch, and which would have
+ *      needed new ocarina-song data in the save file). Nothing vanilla
+ *      changes, and no song has to be "learned": the run of notes is matched
+ *      by ear. See docs/CUSTOM_MUSIC.md for why the *song* is code but the
+ *      *music* is an archive resource.
  *
- * Everything else - the scene, the room, the collision, the textures, the
- * music, the actors, the puzzles, the boss - is data inside VersasFate.o2r
- * and is NOT touched here.
- *
- * Melody (N64 controller buttons; on keyboard the port's ocarina bindings):
- *
- *     A  ->  C-Up  ->  C-Down  ->  C-Left  ->  C-Right  ->  A
- *
- * which in engine pitch terms is D4, D5, F4, B4, A4, D4:
- *
- *     D4 = A button,  F4 = C-Down, A4 = C-Right, B4 = C-Left, D5 = C-Up.
- *
- * Hold R while pressing a note to sharpen it; "Versa's Lullaby" does not use
- * any sharpened notes, and a heavily bent note counts as a wrong note (the
- * same rule the vanilla song checker uses).
- *
- * How the detection works, and why it is not attached to the vanilla song
- * machinery: soh/src/code/code_800EC960.c already exposes an
- * `OnOcarinaNote(pitch, bendFreq, instrument)` hook that fires for every
- * ocarina note the player plays.  We keep a small cursor into our own note
- * table and walk it forward on every *new* pitch while `ocarinaAction` is
- * OCARINA_ACTION_FREE_PLAY (i.e. freestyle playing, never during a song
- * demonstration, the memory game or an ocarina-spot check).  Nothing here
- * touches `AudioOcarina_CheckSongs*`, so no vanilla song behaviour changes.
+ *   3. THE KOKIRI LESSON. Saria (or any other Kokiri) sings the melody once
+ *      per session when you talk to her with the ocarina in hand. Flavour
+ *      only: nothing is unlocked, the warp works before and after it.
  *
  * Build: this file is picked up automatically by the glob in
  * soh/CMakeLists.txt, so it is enough to re-run CMake (or just build) after
- * copying it in.  See patch/APPLY.md for the full Windows walkthrough.
+ * copying it in. See patch/APPLY.md for the full Windows walkthrough, and
+ * build_it.bat for the double-click version of it.
  */
 
 #include "soh/ShipInit.hpp"
 #include "soh/Enhancements/audio/AudioCollection.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/Notification/Notification.h"
+
+#include <cmath>
+#include <cstdint>
+#include <vector>
 
 extern "C" {
+#include <z64.h>
 #include "functions.h"
 #include "macros.h"
 #include "variables.h"
@@ -70,7 +60,7 @@ extern "C" PlayState* gPlayState;
  * ------------------------------------------------------------------------ */
 
 /**
- * Entrance the song warps to. 0x614 is the index produced by the
+ * Entrance the pads and the song warp to. 0x614 is the index produced by the
  * ENTR_VERSAS_FATE line you append to soh/include/tables/entrance_table.h
  * (the vanilla table ends at 0x613).  Keep the two in sync - if you add the
  * entry at the END of the table, as APPLY.md says, this value needs no change.
@@ -103,6 +93,59 @@ extern "C" PlayState* gPlayState;
  * throws away notes bent by more than 20 analog units.
  */
 #define VF_MAX_BEND 0.05f
+
+/* ------------------------------------------------------------------------ *
+ * The vine pads
+ * ------------------------------------------------------------------------ *
+ *
+ * Where they are: inside each of the three areas in sVersasFatePads, a ring of
+ * vines is drawn on the ground about VF_PAD_FORWARD_DISTANCE units in front of
+ * wherever Link appears when he walks into that area. Hooking onto the entry
+ * point instead of a hardcoded coordinate means the pad is always on walkable
+ * ground and always in sight - there is no way to guess an OoT world position
+ * that is guaranteed to be open floor in somebody else's save.
+ *
+ * Standing in the middle of it (VF_PAD_TRIGGER_RADIUS) warps to the Vine
+ * Forest, but only after Link has first stepped *off* the pad - otherwise
+ * arriving in one of those areas, which happens with the pad underfoot when he
+ * comes back from the forest, would immediately bounce him in again.
+ */
+
+static constexpr f32 VF_PAD_FORWARD_DISTANCE = 90.0f;
+static constexpr f32 VF_PAD_INNER_RADIUS = 26.0f;
+static constexpr f32 VF_PAD_OUTER_RADIUS = 45.0f;
+static constexpr f32 VF_PAD_LEAF_RADIUS = 56.0f;
+static constexpr f32 VF_PAD_TRIGGER_RADIUS = 40.0f;
+static constexpr f32 VF_PAD_ARM_RADIUS = 70.0f;
+static constexpr f32 VF_PAD_HINT_RADIUS = 220.0f;
+static constexpr f32 VF_PAD_GROUND_OFFSET = 3.0f;
+static constexpr u16 VF_PAD_ARM_FRAMES = 15;
+static constexpr f32 VF_PAD_FOLLOW_RADIUS = 300.0f;
+static constexpr f32 VF_DEG_TO_RAD = 3.14159265358979f / 180.0f;
+static constexpr f32 VF_YAW_TO_RAD = 3.14159265358979f / 32768.0f;
+
+struct VersasFatePad {
+    s16 scene;
+    const char* name;
+};
+
+static const VersasFatePad sVersasFatePads[] = {
+    { SCENE_KOKIRI_FOREST, "Kokiri Forest" },
+    { SCENE_HYRULE_FIELD, "Hyrule Field" },
+    { SCENE_KAKARIKO_VILLAGE, "Kakariko Village" },
+};
+
+static s32 sPadIndex = -1;
+static s16 sPadLastScene = -1;
+static Vec3f sPadPos = { 0.0f, 0.0f, 0.0f };
+static Vec3f sPadBuiltAt = { 0.0f, 0.0f, 0.0f };
+static bool sPadPlaced = false;
+static bool sPadArmed = false;
+static bool sPadHintShown = false;
+static bool sPadBuilt = false;
+static u16 sPadFramesOutside = 0;
+static std::vector<Vtx> sPadVtx;
+static std::vector<Gfx> sPadGfx;
 
 /* ------------------------------------------------------------------------ *
  * The song
@@ -183,30 +226,18 @@ static void VersasFate_OnActorUpdate(void* actorPtr) {
     sLessonPending = true;
 }
 
-/** When that conversation ends, the Kokiri sings the melody. */
-static void VersasFate_OnGameFrameUpdate(void) {
-    if (!sLessonPending || gPlayState == nullptr) {
-        return;
-    }
-    // Wait for the textbox to close so the singing is not buried under it.
-    if (gPlayState->msgCtx.msgMode != MSGMODE_NONE) {
-        return;
-    }
-
-    sLessonPending = false;
-    sLessonPlayed = true;
-    Audio_PlayFanfare(VersasFate_LullabySequence());
-}
-
 /* ------------------------------------------------------------------------ *
  * Warp
  * ------------------------------------------------------------------------ */
 
-static void VersasFate_Warp(void) {
-    // Close the "Play using [A] and [C]" textbox and put the ocarina away.
-    // Same sequence PauseWarp uses for the vanilla warp songs.
-    Message_CloseTextbox(gPlayState);
-    AudioOcarina_SetInstrument(OCARINA_INSTRUMENT_OFF);
+static void VersasFate_Warp(bool fromOcarina) {
+    if (fromOcarina) {
+        // Close the "Play using [A] and [C]" textbox and put the ocarina away.
+        // Same sequence PauseWarp uses for the vanilla warp songs.
+        Message_CloseTextbox(gPlayState);
+        AudioOcarina_SetInstrument(OCARINA_INSTRUMENT_OFF);
+    }
+
     Audio_PlayFanfare(VF_WARP_FANFARE);
 
     // Hand over to the transition system. OTRPlay_SpawnScene() resolves
@@ -215,6 +246,218 @@ static void VersasFate_Warp(void) {
     gPlayState->nextEntranceIndex = VF_ENTRANCE_INDEX;
     gPlayState->transitionType = TRANS_TYPE_FADE_WHITE_FAST;
     gPlayState->transitionTrigger = TRANS_TRIGGER_START;
+}
+
+/* ------------------------------------------------------------------------ *
+ * Pad bookkeeping - runs once per frame while a save is loaded
+ * ------------------------------------------------------------------------ */
+
+/** Forget everything about the previous area and look for a pad in this one. */
+static void VersasFate_EnterScene(s16 sceneNum) {
+    sPadLastScene = sceneNum;
+    sPadIndex = -1;
+    for (s32 i = 0; i < static_cast<s32>(ARRAY_COUNT(sVersasFatePads)); i++) {
+        if (sVersasFatePads[i].scene == sceneNum) {
+            sPadIndex = i;
+            break;
+        }
+    }
+    sPadPlaced = false;
+    sPadArmed = false;
+    sPadHintShown = false;
+    sPadBuilt = false;
+    sPadFramesOutside = 0;
+}
+
+static void VersasFate_PadUpdate(void) {
+    if (gPlayState == nullptr || !GameInteractor::IsSaveLoaded(true)) {
+        return;
+    }
+
+    if (gPlayState->sceneNum != sPadLastScene) {
+        VersasFate_EnterScene(gPlayState->sceneNum);
+    }
+    if (sPadIndex < 0) {
+        return;
+    }
+
+    Player* player = GET_PLAYER(gPlayState);
+    if (player == nullptr || player->actor.update == nullptr) {
+        return;
+    }
+
+    const Vec3f& pos = player->actor.world.pos;
+
+    // Place the pad the first time we see Link standing still in this area,
+    // i.e. once the fade from the previous map is over and the entrance has
+    // put him where it wants him: two steps ahead of his own two feet.
+    if (!sPadPlaced) {
+        if (gPlayState->transitionTrigger != TRANS_TRIGGER_OFF) {
+            return;
+        }
+        const f32 yaw = static_cast<f32>(player->actor.world.rot.y) * VF_YAW_TO_RAD;
+        sPadPos.x = pos.x + sinf(yaw) * VF_PAD_FORWARD_DISTANCE;
+        sPadPos.z = pos.z + cosf(yaw) * VF_PAD_FORWARD_DISTANCE;
+        sPadPos.y = pos.y;
+        sPadPlaced = true;
+    }
+
+    const f32 dx = pos.x - sPadPos.x;
+    const f32 dz = pos.z - sPadPos.z;
+    const f32 distSq = (dx * dx) + (dz * dz);
+
+    // Stay glued to the local floor: while the pad is in sight it follows the
+    // height of Link's feet, so slopes and steps cannot bury it.
+    if (distSq < VF_PAD_FOLLOW_RADIUS * VF_PAD_FOLLOW_RADIUS) {
+        sPadPos.y = pos.y;
+    }
+
+    // Armed = "was away from the pad long enough that stepping onto it is a
+    // decision". Arriving in the area does not count.
+    if (distSq > VF_PAD_ARM_RADIUS * VF_PAD_ARM_RADIUS) {
+        if (sPadFramesOutside < 0xFFFF) {
+            sPadFramesOutside++;
+        }
+    } else {
+        sPadFramesOutside = 0;
+    }
+    if (sPadFramesOutside >= VF_PAD_ARM_FRAMES) {
+        sPadArmed = true;
+    }
+
+    if (!sPadHintShown && distSq < VF_PAD_HINT_RADIUS * VF_PAD_HINT_RADIUS) {
+        sPadHintShown = true;
+        Notification::Emit({
+            .prefix = "Versa's Fate",
+            .prefixColor = ImVec4(0.45f, 0.85f, 0.45f, 1.0f),
+            .message = std::string("A vine pad hums in the grass of ") + sVersasFatePads[sPadIndex].name +
+                       " - step into the middle of it to travel to Versa's Vine Forest.",
+            .messageColor = ImVec4(0.82f, 0.95f, 0.82f, 1.0f),
+            .remainingTime = 6.0f,
+        });
+    }
+
+    if (!sPadArmed || distSq > VF_PAD_TRIGGER_RADIUS * VF_PAD_TRIGGER_RADIUS) {
+        return;
+    }
+    // Never interrupt a fade or a cutscene.
+    if (gPlayState->transitionTrigger != TRANS_TRIGGER_OFF || gPlayState->csCtx.state != CS_STATE_IDLE) {
+        return;
+    }
+
+    sPadArmed = false;
+    sPadFramesOutside = 0;
+    VersasFate_Warp(false);
+}
+
+/* ------------------------------------------------------------------------ *
+ * Drawing the pad - runs once per frame, inside the map's draw
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The pad is a flat mosaic of triangles laid on the ground and built straight
+ * into the display list with world-space coordinates: no object file, no
+ * texture, no actor, nothing that can fail to load. The recipe (decal render
+ * mode, primitive-colour combine, gMtxClear) is the one the port's own
+ * collision viewer uses to draw on top of the scene, so it is known to work on
+ * every platform SoH runs on.
+ */
+static void VersasFate_BuildPadVerts(void) {
+    constexpr s32 kSegments = 12;
+    const f32 y = sPadPos.y + VF_PAD_GROUND_OFFSET;
+
+    sPadVtx.clear();
+    sPadVtx.reserve(1 + (kSegments * 2) + (kSegments / 2));
+
+    // Centre, then the two rings, then one leaf tip between every second pair.
+    sPadVtx.push_back(gdSPDefVtxN(static_cast<short>(lroundf(sPadPos.x)), static_cast<short>(lroundf(y)),
+                                  static_cast<short>(lroundf(sPadPos.z)), 0, 0, 0, 127, 0, 0xFF));
+
+    for (s32 i = 0; i < kSegments; i++) {
+        const f32 angle = static_cast<f32>(i) * (360.0f / static_cast<f32>(kSegments)) * VF_DEG_TO_RAD;
+        sPadVtx.push_back(gdSPDefVtxN(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_INNER_RADIUS))),
+                                      static_cast<short>(lroundf(y)),
+                                      static_cast<short>(lroundf(sPadPos.z + (sinf(angle) * VF_PAD_INNER_RADIUS))), 0, 0,
+                                      0, 127, 0, 0xFF));
+    }
+    for (s32 i = 0; i < kSegments; i++) {
+        const f32 angle = static_cast<f32>(i) * (360.0f / static_cast<f32>(kSegments)) * VF_DEG_TO_RAD;
+        sPadVtx.push_back(gdSPDefVtxN(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_OUTER_RADIUS))),
+                                      static_cast<short>(lroundf(y)),
+                                      static_cast<short>(lroundf(sPadPos.z + (sinf(angle) * VF_PAD_OUTER_RADIUS))), 0, 0,
+                                      0, 127, 0, 0xFF));
+    }
+    for (s32 i = 0; i < kSegments / 2; i++) {
+        const f32 angle =
+            (15.0f + (static_cast<f32>(i) * (720.0f / static_cast<f32>(kSegments)))) * VF_DEG_TO_RAD;
+        sPadVtx.push_back(gdSPDefVtxN(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_LEAF_RADIUS))),
+                                      static_cast<short>(lroundf(y)),
+                                      static_cast<short>(lroundf(sPadPos.z + (sinf(angle) * VF_PAD_LEAF_RADIUS))), 0, 0,
+                                      0, 127, 0, 0xFF));
+    }
+
+    sPadBuiltAt = sPadPos;
+    sPadBuilt = true;
+}
+
+static void VersasFate_DrawPad(void) {
+    if (gPlayState == nullptr || sPadIndex < 0 || !sPadPlaced) {
+        return;
+    }
+    if (gPlayState->sceneNum != sVersasFatePads[sPadIndex].scene) {
+        return;
+    }
+
+    constexpr s32 kSegments = 12;
+
+    if (!sPadBuilt || sPadBuiltAt.x != sPadPos.x || sPadBuiltAt.y != sPadPos.y || sPadBuiltAt.z != sPadPos.z) {
+        VersasFate_BuildPadVerts();
+    }
+    if (sPadVtx.size() != static_cast<size_t>(1 + (kSegments * 2) + (kSegments / 2))) {
+        return;
+    }
+
+    const u32 renderMode = Z_CMP | Z_UPD | CVG_DST_CLAMP | FORCE_BL | ZMODE_DEC;
+
+    sPadGfx.clear();
+    sPadGfx.push_back(gsSPTexture(0, 0, 0, G_TX_RENDERTILE, G_OFF));
+    sPadGfx.push_back(gsDPSetCycleType(G_CYC_1CYCLE));
+    sPadGfx.push_back(gsDPSetRenderMode(renderMode | GBL_c1(G_BL_CLR_IN, G_BL_0, G_BL_CLR_IN, G_BL_1),
+                                        renderMode | GBL_c2(G_BL_CLR_IN, G_BL_0, G_BL_CLR_IN, G_BL_1)));
+    sPadGfx.push_back(gsDPSetCombineMode(G_CC_PRIMITIVE_ENVA, G_CC_PRIMITIVE_ENVA));
+    sPadGfx.push_back(gsSPLoadGeometryMode(G_ZBUFFER));
+    sPadGfx.push_back(gsDPSetEnvColor(0xFF, 0xFF, 0xFF, 0xFF));
+    sPadGfx.push_back(gsSPMatrix(&gMtxClear, G_MTX_MODELVIEW | G_MTX_LOAD | G_MTX_NOPUSH));
+    sPadGfx.push_back(gsSPVertex(reinterpret_cast<uintptr_t>(sPadVtx.data()), static_cast<u32>(sPadVtx.size()), 0));
+
+    // Centre: the moss the vines grow out of.
+    sPadGfx.push_back(gsDPSetPrimColor(0, 0, 28, 62, 30, 255));
+    for (s32 i = 0; i < kSegments; i++) {
+        sPadGfx.push_back(gsSP1Triangle(0, 1 + i, 1 + ((i + 1) % kSegments), 0));
+    }
+
+    // Ring: the woven vines themselves.
+    sPadGfx.push_back(gsDPSetPrimColor(0, 0, 62, 128, 58, 255));
+    for (s32 i = 0; i < kSegments; i++) {
+        const s32 inner = 1 + i;
+        const s32 innerNext = 1 + ((i + 1) % kSegments);
+        const s32 outer = 1 + kSegments + i;
+        const s32 outerNext = 1 + kSegments + ((i + 1) % kSegments);
+        sPadGfx.push_back(gsSP2Triangles(inner, outer, outerNext, 0, inner, outerNext, innerNext, 0));
+    }
+
+    // Leaf tips poking out of the ring.
+    sPadGfx.push_back(gsDPSetPrimColor(0, 0, 128, 210, 96, 255));
+    for (s32 i = 0; i < kSegments / 2; i++) {
+        sPadGfx.push_back(gsSP1Triangle(1 + (kSegments * 2) + i, 1 + kSegments + (i * 2),
+                                        1 + kSegments + (((i * 2) + 1) % kSegments), 0));
+    }
+
+    sPadGfx.push_back(gsSPEndDisplayList());
+
+    OPEN_DISPS(gPlayState->state.gfxCtx);
+    gSPDisplayList(POLY_OPA_DISP++, sPadGfx.data());
+    CLOSE_DISPS(gPlayState->state.gfxCtx);
 }
 
 /* ------------------------------------------------------------------------ *
@@ -266,13 +509,35 @@ static void VersasFate_OnOcarinaNote(uint8_t pitch, float bendFreq, int8_t instr
         sVersasLullabyPos++;
         if (sVersasLullabyPos >= ARRAY_COUNT(sVersasLullaby)) {
             VersasFate_ResetSong();
-            VersasFate_Warp();
+            VersasFate_Warp(true);
         }
     } else {
         // Wrong note: restart, but let this note be the first note again so
         // that a repeated first note is not "eaten".
         sVersasLullabyPos = (pitch == sVersasLullaby[0]) ? 1 : 0;
     }
+}
+
+/* ------------------------------------------------------------------------ *
+ * Per-frame housekeeping
+ * ------------------------------------------------------------------------ */
+
+/** When a conversation with a Kokiri ends, they sing the melody. */
+static void VersasFate_OnGameFrameUpdate(void) {
+    if (gPlayState == nullptr) {
+        return;
+    }
+
+    if (sLessonPending) {
+        // Wait for the textbox to close so the singing is not buried under it.
+        if (gPlayState->msgCtx.msgMode == MSGMODE_NONE) {
+            sLessonPending = false;
+            sLessonPlayed = true;
+            Audio_PlayFanfare(VersasFate_LullabySequence());
+        }
+    }
+
+    VersasFate_PadUpdate();
 }
 
 static void RegisterVersasFate() {
@@ -282,7 +547,9 @@ static void RegisterVersasFate() {
     // Kokiri does too, for saves where Saria has moved on.
     COND_ID_HOOK(OnActorUpdate, ACTOR_EN_SA, true, VersasFate_OnActorUpdate);
     COND_ID_HOOK(OnActorUpdate, ACTOR_EN_KO, true, VersasFate_OnActorUpdate);
+
     COND_HOOK(OnGameFrameUpdate, true, VersasFate_OnGameFrameUpdate);
+    COND_HOOK(OnPlayDrawEnd, true, VersasFate_DrawPad);
 }
 
 static RegisterShipInitFunc initFunc(RegisterVersasFate);
