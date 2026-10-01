@@ -1,0 +1,7 @@
+<Room Version="0">
+	<SetMesh Data="0" MeshHeaderType="0" PolyNum="1">
+		<Polygon PolyType="0" MeshOpa="objects/versas_fate/versa_room_0_dl_opa" MeshXlu="objects/versas_fate/versa_room_0_dl_xlu" />
+	</SetMesh>
+	<SetCollisionHeader FileName="scenes/shared/versa_scene/versa_collision" />
+	<EndMarker />
+</Room>

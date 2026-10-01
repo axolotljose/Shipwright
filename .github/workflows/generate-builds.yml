@@ -11,11 +11,11 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         submodules: true
     - name: Configure ccache
-      uses: hendrikmuhs/ccache-action@v1.2.23
+      uses: hendrikmuhs/ccache-action@d62db5f07c26379fc4b4e0916f098a92573c3b03 # v1.2.23
       with:
         max-size: "2G"
         evict-old-files: job
@@ -37,7 +37,7 @@ jobs:
         cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release -DSOH_TOOLS_ONLY=ON
         cmake --build build-cmake --config Release --target GenerateSohOtr -j4
     - name: Upload soh.o2r
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: soh.o2r
         path: soh.o2r
@@ -48,22 +48,22 @@ jobs:
     runs-on: macos-14
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         submodules: true
     - name: Setup Macports
-      uses: melusina-org/setup-macports@v1
+      uses: melusina-org/setup-macports@103eded5f10979e927bffcd6d0b86cbbdb2c3bb3 # v1
       with:
         parameters: '.github/macports.yml'
     - name: Configure ccache
-      uses: hendrikmuhs/ccache-action@v1.2.23
+      uses: hendrikmuhs/ccache-action@d62db5f07c26379fc4b4e0916f098a92573c3b03 # v1.2.23
       with:
         key: ${{ runner.os }} # ccache-macos-{{ timestamp }}
         max-size: "2G"
         evict-old-files: job
         save: ${{ github.ref_name == github.event.repository.default_branch }}
     - name: Download soh.o2r
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
       with:
         name: soh.o2r
         path: build-cmake/soh
@@ -79,7 +79,7 @@ jobs:
         mv _packages/*.dmg SoH.dmg
         mv README.md readme.txt
     - name: Upload build
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: soh-mac
         path: |
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - name: Git Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         submodules: true
     - name: Install dependencies
@@ -99,7 +99,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y $(cat linux-build-deps/apt.txt)
     - name: Configure ccache
-      uses: hendrikmuhs/ccache-action@v1.2.23
+      uses: hendrikmuhs/ccache-action@d62db5f07c26379fc4b4e0916f098a92573c3b03 # v1.2.23
       with:
         max-size: "2G"
         evict-old-files: job
@@ -110,7 +110,7 @@ jobs:
           ${{ runner.os }}-ccache
     - name: Restore Cached deps folder
       id: restore-cache-deps
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         key: ${{ runner.os }}-deps-${{ github.ref }}-${{ github.sha }}
         restore-keys: |
@@ -155,7 +155,7 @@ jobs:
         sudo make install
         sudo cp -av /usr/local/lib/libzip* /lib/x86_64-linux-gnu/
     - name: Download soh.o2r
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
       with:
         name: soh.o2r
         path: build-cmake/soh
@@ -171,7 +171,7 @@ jobs:
         CC: gcc-12
         CXX: g++-12
     - name: Upload build
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: soh-linux
         path: |
@@ -179,7 +179,7 @@ jobs:
           readme.txt
     - name: Save Cache deps folder
       if: ${{ github.ref_name == github.event.repository.default_branch }}
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         key: ${{ steps.restore-cache-deps.outputs.cache-primary-key }}
         path: deps
@@ -193,11 +193,11 @@ jobs:
         choco install ninja -y
         Remove-Item -Path "C:\ProgramData\Chocolatey\bin\ccache.exe" -Force -ErrorAction SilentlyContinue
     - name: Git Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         submodules: true
     - name: Configure ccache
-      uses: hendrikmuhs/ccache-action@v1.2.23
+      uses: hendrikmuhs/ccache-action@d62db5f07c26379fc4b4e0916f098a92573c3b03 # v1.2.23
       with:
         max-size: "2G"
         evict-old-files: job
@@ -208,7 +208,7 @@ jobs:
           ${{ runner.os }}-ccache
     - name: Restore Cached VCPKG folder
       id: restore-cache-vcpkg
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         key: ${{ runner.os }}-vcpkg-${{ github.ref }}-${{ github.sha }}
         restore-keys: |
@@ -216,11 +216,11 @@ jobs:
           ${{ runner.os }}-vcpkg-
         path: vcpkg
     - name: Configure Developer Command Prompt
-      uses: TheMrMilchmann/setup-msvc-dev@v4
+      uses: TheMrMilchmann/setup-msvc-dev@368ef7d1ee4d1171b31d4a7f67f4d954f903f5a9 # v4
       with:
         arch: x64
     - name: Download soh.o2r
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
       with:
         name: soh.o2r
         path: build-windows/soh
@@ -230,21 +230,56 @@ jobs:
       run: |
         set $env:PATH="$env:USERPROFILE/.cargo/bin;$env:PATH"
         cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_REMOTE_CONTROL=1
-        cmake --build build-windows --config Release --parallel 10
+        # Tee the build output to a file: if a compile fails, the step below
+        # reports the error instead of leaving a green-tick-with-exit-code-1.
+        cmake --build build-windows --config Release --parallel 10 2>&1 | Tee-Object -FilePath build-windows.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         (cd build-windows && cpack)
         cd ..
         mv _packages/*.zip _packages/soh-windows.zip
+    - name: Report the compile errors
+      if: failure()
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        if (-not (Test-Path build-windows.log)) { exit 0 }
+        $lines = Get-Content build-windows.log
+        $errors = $lines | Select-String -Pattern 'error C[0-9]|fatal error|error MSB|CMake Error' | Select-Object -Last 30
+        $body = @()
+        $body += 'The Windows build failed. Last lines of the log:'
+        $body += '```'
+        $body += ($lines | Select-Object -Last 40)
+        $body += '```'
+        if ($errors) {
+          $body += 'Compiler errors:'
+          $body += '```'
+          $body += ($errors | ForEach-Object { $_.Line })
+          $body += '```'
+        }
+        $body -join "`n" | Out-File -FilePath build-fail.md -Encoding utf8
+        $body -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+        $pr = gh pr list --head $env:GITHUB_REF_NAME --state open --json number --jq '.[0].number'
+        if ($pr) { gh pr comment $pr --body-file build-fail.md }
+
     - name: Unzip package
       run: Expand-Archive -Path _packages/soh-windows.zip -DestinationPath soh-windows
+    - name: Install the Versa's Fate mod into the package
+      run: |
+        # Ship the .o2r inside the downloaded build, so the player only has to
+        # start soh.exe - no copying files around.
+        New-Item -ItemType Directory -Force -Path soh-windows/mods | Out-Null
+        Copy-Item versas-fate/VersasFate.o2r soh-windows/mods/VersasFate.o2r
+        Get-Item soh-windows/mods/VersasFate.o2r | Select-Object FullName, Length
     - name: Upload build
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: soh-windows
         path: soh-windows
     - name: Save Cache VCPKG folder
       if: ${{ github.ref_name == github.event.repository.default_branch }}
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         key: ${{ steps.restore-cache-vcpkg.outputs.cache-primary-key }}
         path: vcpkg

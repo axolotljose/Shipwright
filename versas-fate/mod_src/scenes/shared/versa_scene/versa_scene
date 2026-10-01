@@ -1,0 +1,66 @@
+<Room Version="0">
+	<SetStartPositionList>
+		<StartPositionEntry Id="0" PosX="0" PosY="0" PosZ="2200" RotX="0" RotY="32768" RotZ="0" Params="0" />
+	</SetStartPositionList>
+	<SetActorList>
+		<ActorEntry Id="355" PosX="300" PosY="0" PosZ="2000" RotX="0" RotY="16384" RotZ="0" Params="65280" />
+		<ActorEntry Id="355" PosX="-350" PosY="0" PosZ="2150" RotX="0" RotY="36864" RotZ="0" Params="65281" />
+		<ActorEntry Id="355" PosX="0" PosY="0" PosZ="1650" RotX="0" RotY="49152" RotZ="0" Params="65282" />
+		<ActorEntry Id="85" PosX="-800" PosY="0" PosZ="1550" RotX="0" RotY="0" RotZ="0" Params="0" />
+		<ActorEntry Id="85" PosX="850" PosY="0" PosZ="1450" RotX="0" RotY="0" RotZ="0" Params="0" />
+		<ActorEntry Id="255" PosX="-250" PosY="0" PosZ="450" RotX="0" RotY="0" RotZ="0" Params="0" />
+		<ActorEntry Id="298" PosX="150" PosY="0" PosZ="300" RotX="0" RotY="0" RotZ="0" Params="2560" />
+		<ActorEntry Id="10" PosX="150" PosY="0" PosZ="250" RotX="0" RotY="0" RotZ="10" Params="12320" />
+		<ActorEntry Id="298" PosX="1200" PosY="330" PosZ="700" RotX="0" RotY="36864" RotZ="0" Params="2818" />
+		<ActorEntry Id="10" PosX="-1150" PosY="0" PosZ="250" RotX="0" RotY="0" RotZ="11" Params="14273" />
+		<ActorEntry Id="96" PosX="-900" PosY="0" PosZ="-150" RotX="0" RotY="0" RotZ="0" Params="512" />
+		<ActorEntry Id="96" PosX="900" PosY="0" PosZ="-300" RotX="0" RotY="0" RotZ="0" Params="768" />
+		<ActorEntry Id="40" PosX="0" PosY="0" PosZ="-1800" RotX="0" RotY="0" RotZ="0" Params="0" />
+		<ActorEntry Id="85" PosX="-800" PosY="0" PosZ="-650" RotX="0" RotY="0" RotZ="0" Params="1" />
+		<ActorEntry Id="85" PosX="820" PosY="0" PosZ="-700" RotX="0" RotY="0" RotZ="0" Params="1" />
+		<ActorEntry Id="8" PosX="-700" PosY="400" PosZ="-800" RotX="0" RotY="0" RotZ="0" Params="0" />
+		<ActorEntry Id="8" PosX="700" PosY="400" PosZ="-800" RotX="0" RotY="0" RotZ="0" Params="0" />
+		<ActorEntry Id="8" PosX="-700" PosY="400" PosZ="-1300" RotX="0" RotY="0" RotZ="0" Params="0" />
+		<ActorEntry Id="8" PosX="700" PosY="400" PosZ="-1300" RotX="0" RotY="0" RotZ="0" Params="0" />
+	</SetActorList>
+	<SetRoomList>
+		<RoomEntry Path="scenes/shared/versa_scene/versa_room_0" VromStart="0" VromEnd="309" />
+	</SetRoomList>
+	<SetWind WindWest="40" WindVertical="0" WindSouth="60" WindSpeed="10" />
+	<SetEntranceList>
+		<EntranceEntry Room="0" Spawn="0" />
+	</SetEntranceList>
+	<SetSpecialObjects ElfMessage="0" GlobalObject="1" />
+	<SetRoomBehavior GameplayFlags1="0" GameplayFlags2="0" />
+	<SetObjectList>
+		<ObjectEntry Id="1" />
+		<ObjectEntry Id="2" />
+		<ObjectEntry Id="3" />
+		<ObjectEntry Id="14" />
+		<ObjectEntry Id="28" />
+		<ObjectEntry Id="57" />
+		<ObjectEntry Id="74" />
+		<ObjectEntry Id="197" />
+	</SetObjectList>
+	<SetLightList>
+		<LightInfo Type="0" X="-700" Y="420" Z="-800" ColorR="255" ColorG="170" ColorB="90" Radius="260" DrawGlow="1" />
+		<LightInfo Type="0" X="700" Y="420" Z="-800" ColorR="255" ColorG="170" ColorB="90" Radius="260" DrawGlow="1" />
+		<LightInfo Type="0" X="-700" Y="420" Z="-1300" ColorR="255" ColorG="170" ColorB="90" Radius="260" DrawGlow="1" />
+		<LightInfo Type="0" X="700" Y="420" Z="-1300" ColorR="255" ColorG="170" ColorB="90" Radius="260" DrawGlow="1" />
+	</SetLightList>
+	<SetLightingSettings>
+		<LightingSetting AmbientColorR="28" AmbientColorG="40" AmbientColorB="34" Light1ColorR="190" Light1ColorG="210" Light1ColorB="195" Light1DirX="0" Light1DirY="116" Light1DirZ="60" Light2ColorR="60" Light2ColorG="70" Light2ColorB="90" Light2DirX="0" Light2DirY="-60" Light2DirZ="-40" FogColorR="26" FogColorG="40" FogColorB="34" FogNear="900" FogFar="1400" />
+		<LightingSetting AmbientColorR="34" AmbientColorG="46" AmbientColorB="38" Light1ColorR="200" Light1ColorG="215" Light1ColorB="190" Light1DirX="10" Light1DirY="116" Light1DirZ="55" Light2ColorR="70" Light2ColorG="80" Light2ColorB="100" Light2DirX="0" Light2DirY="-60" Light2DirZ="-40" FogColorR="30" FogColorG="44" FogColorB="36" FogNear="900" FogFar="1400" />
+		<LightingSetting AmbientColorR="22" AmbientColorG="32" AmbientColorB="28" Light1ColorR="170" Light1ColorG="190" Light1ColorB="175" Light1DirX="-10" Light1DirY="116" Light1DirZ="60" Light2ColorR="60" Light2ColorG="70" Light2ColorB="90" Light2DirX="0" Light2DirY="-60" Light2DirZ="-40" FogColorR="20" FogColorG="32" FogColorB="28" FogNear="800" FogFar="1300" />
+		<LightingSetting AmbientColorR="18" AmbientColorG="26" AmbientColorB="24" Light1ColorR="150" Light1ColorG="170" Light1ColorB="160" Light1DirX="0" Light1DirY="116" Light1DirZ="60" Light2ColorR="50" Light2ColorG="60" Light2ColorB="80" Light2DirX="0" Light2DirY="-60" Light2DirZ="-40" FogColorR="16" FogColorG="26" FogColorB="24" FogNear="700" FogFar="1200" />
+	</SetLightingSettings>
+	<SetTimeSettings Hour="0" Minute="0" TimeIncrement="0" />
+	<SetSkyboxSettings Unknown="0" SkyboxId="0" Weather="0" Indoors="1" />
+	<SetSkyboxModifier SkyboxDisabled="1" SunMoonDisabled="1" />
+	<SetExitList>
+	</SetExitList>
+	<EndMarker />
+	<SetSoundSettings SeqId="62" NatureAmbienceId="0" Reverb="0" />
+	<SetEchoSettings Echo="0" />
+	<SetCameraSettings CameraMovement="0" WorldMapArea="0" />
+</Room>

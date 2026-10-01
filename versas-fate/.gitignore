@@ -1,0 +1,11 @@
+# This folder is a self-contained mod project living inside the Ship of
+# Harkinian checkout, not game code. The SoH root .gitignore excludes *.o2r
+# and *.png globally (they are build outputs for the game itself), but here
+# they are the deliverables: the packed archive people drop into mods/, and
+# the source textures the archive is built from.
+!VersasFate.o2r
+!mod_src/textures/**/*.png
+
+# Generated practice audio (tools/preview_lullaby.py) - regenerable, ~900 KB
+music/*_preview.wav
+music/*_practice.wav
