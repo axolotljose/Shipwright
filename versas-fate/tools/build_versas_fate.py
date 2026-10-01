@@ -14,7 +14,10 @@ Inputs (all produced by the other scripts in tools/, or edited by hand):
     music/<name>.json                               -> optional per-track settings
 
 Output:
-    VersasFate.o2r
+    VersasFate.o2r          the mod: scene, objects, textures.  Vanilla music only.
+    VersasFate-Music.o2r    OPTIONAL extra pack: the three custom tracks.  Install it
+                            only if you want the custom music; the mod itself never
+                            plays a custom sequence, so the game is unaffected by it.
 
 Archive layout produced (this is what the engine looks for at runtime):
 
@@ -31,10 +34,21 @@ Archive layout produced (this is what the engine looks for at runtime):
     textures/versas_fate/leaf.ia4
     textures/versas_fate/stone.i8
     textures/versas_fate/rune.ia8
+    portVersion                                              archive format marker
+
+VersasFate-Music.o2r (optional, separate archive):
+
     custom/music/versasfate/Versas Vine Forest_bgm            custom sequences
     custom/music/versasfate/Versa Gohma_bgm
     custom/music/versasfate/Versas Lullaby_fanfare
-    portVersion                                              archive format marker
+    portVersion
+
+The custom sequences live in their own archive on purpose: with only
+VersasFate.o2r installed, nothing in the game ever loads a .seq this mod wrote,
+so every note you hear (the warp jingle, the forest theme, the boss theme) is a
+vanilla sequence. The C++ hook looks the melody up by name and falls back to the
+vanilla Minuet jingle when the music pack is absent, so no code change is needed
+to switch between the two.
 
 Nothing here needs the ROM, ZAPD, Blender or the C++ toolchain. Textures are
 PNG files converted with the same arithmetic the official packer uses
@@ -287,23 +301,87 @@ def write_archive(entries, out_path):
     os.rename(tmp, out_path)
 
 
+def validate(archive=None):
+    """Refuse to package (or hand over) resources the engine cannot load.
+
+    See tools/validate_mod.py: it re-checks the XML against the engine's own
+    readers. A resource that fails there is a crash in game, and the crash it
+    was written for (a collision header with a mismatched closing tag) is
+    exactly the kind that looks like "the game froze when I warped".
+    """
+    import validate_mod
+
+    if archive:
+        argv = sys.argv
+        sys.argv = [argv[0], "--o2r", archive]
+        try:
+            return validate_mod.main()
+        finally:
+            sys.argv = argv
+    return validate_mod.main()
+
+
+def validate_music():
+    """Refuse to ship .seq files the sequence player cannot follow.
+
+    See tools/validate_seq.py: it decodes the bytecode with the same rules as
+    soh/src/code/audio_seqplayer.c. A script with a wrong offset does not
+    always crash - it just plays silence (or walks off the end of the data),
+    which is impossible to debug from inside the game.
+    """
+    import validate_seq
+
+    music_dir = os.path.join(ROOT, "music")
+    paths = sorted(os.path.join(music_dir, name) for name in os.listdir(music_dir)
+                   if name.endswith(".seq"))
+    if not paths:
+        print("  (no .seq files in music/ - skipping sequence validation)")
+        return 0
+    print("validating music/ ...")
+    return validate_seq.main(["validate_seq"] + paths)
+
+
 def main():
     if not os.path.isdir(MOD_SRC):
         raise SystemExit("mod_src/ not found - run tools/make_textures.py and tools/make_scene.py first")
 
+    print("validating mod_src/ ...")
+    if validate() != 0:
+        raise SystemExit("refusing to pack: fix the problems above first")
+
+    if validate_music() != 0:
+        raise SystemExit("refusing to pack: fix the sequences in music/ first")
+
     entries = {}
     print("collecting assets from mod_src/ ...")
     collect_mod_src(entries)
-    print("collecting music ...")
-    collect_music(entries)
+
+    music_entries = {}
+    print("collecting music (separate archive) ...")
+    collect_music(music_entries)
 
     write_archive(entries, OUT_PATH)
+    if validate(OUT_PATH) != 0:
+        raise SystemExit("the packed archive failed validation")
 
     size = os.path.getsize(OUT_PATH)
     print("")
-    print("wrote %s (%.1f KB, %d entries)" % (OUT_PATH, size / 1024.0, len(entries) + 1))
+    print("wrote %s (%.1f KB, %d entries) - vanilla music only" % (OUT_PATH, size / 1024.0, len(entries) + 1))
     print("copy it to:  <Ship of Harkinian>/mods/VersasFate.o2r")
     print("then start the game and check Help -> Mods, or read the log for 'Versa'.")
+
+    if music_entries:
+        music_path = os.path.join(ROOT, "VersasFate-Music.o2r")
+        write_archive(music_entries, music_path)
+        if validate(music_path) != 0:
+            raise SystemExit("the music pack failed validation")
+        size = os.path.getsize(music_path)
+        print("")
+        print("wrote %s (%.1f KB, %d entries) - the three custom tracks, OPTIONAL"
+              % (music_path, size / 1024.0, len(music_entries) + 1))
+        print("install it in mods/ as well only if you want custom music instead of")
+        print("the vanilla themes: the melody lesson then uses it, otherwise it plays")
+        print("the vanilla Minuet jingle.")
 
 
 if __name__ == "__main__":

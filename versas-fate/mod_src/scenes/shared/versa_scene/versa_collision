@@ -363,4 +363,4 @@
 	<PolygonType Data1="0x0000" Data2="0x0000" />
 	<CameraData SType="1" NumData="1" CameraPosDataSeg="0" />
 	<CameraPositionData PosX="0" PosY="0" PosZ="0" RotX="0" RotY="0" RotZ="0" FOV="60" JfifID="0" Unknown="0" />
-</Collision>
+</CollisionHeader>

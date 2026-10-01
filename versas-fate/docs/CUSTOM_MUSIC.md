@@ -1,12 +1,19 @@
 # Custom music for Versa's Fate
 
-The mod ships three pieces of music:
+The mod ships three pieces of music, in their **own optional archive**:
 
-| Track | In the archive as | What it is for |
+| Track | In `VersasFate-Music.o2r` as | What it is for |
 |---|---|---|
 | Versas Vine Forest | `custom/music/versasfate/Versas Vine Forest_bgm` | the forest theme |
 | Versa Gohma | `custom/music/versasfate/Versa Gohma_bgm` | the boss theme |
 | Versas Lullaby | `custom/music/versasfate/Versas Lullaby_fanfare` | the ocarina melody |
+
+**`VersasFate.o2r` - the mod itself - contains no music at all.** With only that
+installed, every track you hear is vanilla (the Minuet jingle on warp, Saria's
+theme in the forest, the vanilla boss theme). That is the shipped default: the
+mod never hands the audio engine a sequence file of its own, so it cannot be the
+cause of an audio problem. `VersasFate-Music.o2r` is a separate 1 KB archive you
+copy into `mods/` as well if you want the custom tracks.
 
 SoH reads music out of an archive from the `custom/music/` folder and turns
 every entry it finds into a *custom sequence* that you can then assign to any
@@ -75,6 +82,19 @@ python tools\build_versas_fate.py
 `build_versas_fate.py` wraps the `.seq` in the Sequence resource header the
 engine expects, so you never have to touch binary formats by hand.
 
+It also runs `tools/validate_seq.py` over every file in `music/` before packing,
+and so should you after converting:
+
+```bat
+python tools\validate_seq.py music\*.seq
+```
+
+That decodes the bytecode with the same rules as `audio_seqplayer.c` and fails
+on the things that make a song silent rather than crash - an offset written in
+the wrong encoding, a layer pointer one byte off, a channel script that ends
+before its layer can play, a note delay of zero. Check the printed length too:
+it should be roughly the length of your track.
+
 ### 2.3 What you get, and what you don't
 
 You get the melody, the rhythm, and the game's instrument. You do not get
@@ -86,6 +106,9 @@ is not good enough, use section 4.
 ---
 
 ## 3. Assigning it in game
+
+*(With `VersasFate-Music.o2r` installed. Without it there is nothing here to
+assign, and the game plays vanilla music.)*
 
 The mod's music is registered as *custom* sequences; the game will not use
 them until you point a vanilla slot at them. That is a one-time, per-save-file

@@ -5,7 +5,8 @@ A Ship of Harkinian (SoH) mod that adds a new area, *Versa's Vine Forest*
 that teleport you there from Kokiri Forest, Hyrule Field and Kakariko Village,
 and the custom ocarina song *Versa's Lullaby* as a second way in - shipped as a
 real `.o2r` archive plus one small, clearly delimited C++ file for the pads and
-the song, which an archive cannot contain.
+the song, which an archive cannot contain. The mod itself contains no music: it
+uses vanilla tracks, and the three custom pieces are a separate optional archive.
 
 This folder is a complete, self-contained project: build the archive, copy it
 into `mods/`, play. Everything here runs on Windows with a stock Python 3.9+
@@ -74,13 +75,19 @@ instead of scrolling away.
 ```
 versas-fate/
   README.md                  this file
-  VersasFate.o2r             the built mod archive (drop-in, 16 KB)
-  tools/build_versas_fate.py packs mod_src/ -> VersasFate.o2r
+  VersasFate.o2r             the built mod archive (drop-in, 15 KB, vanilla music)
+  VersasFate-Music.o2r       OPTIONAL extra archive: the three custom tracks
+  tools/build_versas_fate.py packs mod_src/ -> VersasFate.o2r (+ the music pack)
+  tools/validate_mod.py      re-checks mod_src/ (and the packed archive) against
+                             the engine's own resource readers before packing
+  tools/validate_seq.py      decodes every music/*.seq the way the sequence
+                             player will, before it is packed into an archive
   mod_src/                   the unpacked mod (this is what you edit)
     scenes/shared/versa_scene/    scene, room, collision (XML)
     objects/versas_fate/          display lists and vertex buffers (XML)
     textures/versas_fate/*.png    source textures ("<name>.<format>.png")
-  music/*.seq                source sequences (3 placeholder tracks)
+  music/*.seq                source sequences (the 3 custom tracks, packed into
+                             VersasFate-Music.o2r, NOT into the mod archive)
   tools/
     make_textures.py         regenerates the six textures from code
     make_scene.py            regenerates the scene/room/collision XML
@@ -134,18 +141,23 @@ the one honest limit of the format, and section 5 tells you exactly what to do.
 <Ship of Harkinian>\
     oot.o2r
     mods\
-        VersasFate.o2r      <-- this
+        VersasFate.o2r        <-- the mod (this is all you need)
+        VersasFate-Music.o2r  <-- OPTIONAL: the three custom tracks
 ```
 
 Then start the game. Useful things to check:
 
 | What to look at | Expected |
 |---|---|
-| Game log (`logs/` or the console) | No `Could not find sound font` / `Invalid Sequence` warnings |
-| In-game audio editor (Enhancements → Audio Editor) | Three new entries: "Versas Vine Forest", "Versa Gohma", "Versas Lullaby" |
+| Game log (`logs/Ship of Harkinian.log`) | No `Failed to parse XML file`, `Could not find sound font` or `Invalid Sequence` lines |
 | Walking into Kokiri Forest, Hyrule Field or Kakariko Village | A ring of vines is drawn on the ground in front of you, and a notification says where you are |
 | Standing in the middle of that ring (step off it first) | White fade into the vine forest |
 | Playing A, C-Up, C-Down, C-Left, C-Right, A on the ocarina | Same warp |
+| The music | vanilla: the Minuet jingle on warp, Saria's theme in the forest. The Audio Editor only lists the three custom tracks if you installed `VersasFate-Music.o2r` as well |
+
+**Updating.** Replace `mods/VersasFate.o2r` with the new file and restart the
+game - that is the whole update procedure. The archive is self-contained and
+nothing outside it is touched.
 
 **Getting there: the vine pads.** The pads cover the "no song required" case.
 Each of the three areas has one, and it is placed the first time you walk into
@@ -159,12 +171,12 @@ area.
 
 **The lesson.** With the ocarina in your inventory, the first time you talk to
 **Saria** (Kokiri Forest early on, or Sacred Forest Meadow where she hands you
-the ocarina) she sings the melody for you, using the mod's own "Versas
-Lullaby" sequence from the archive. Any other Kokiri in Kokiri Forest does the
-same, for saves where Saria has moved on. Once per play session. This is a
-demonstration, not an unlock: nothing is stored, and the song warps you before
-and after it. If the archive is not installed the lesson falls back to the
-vanilla Minuet jingle.
+the ocarina) she sings the melody for you. Any other Kokiri in Kokiri Forest
+does the same, for saves where Saria has moved on. Once per play session. This
+is a demonstration, not an unlock: nothing is stored, and the song warps you
+before and after it. With only `VersasFate.o2r` installed she sings the vanilla
+Minuet jingle; installing `VersasFate-Music.o2r` makes her sing the mod's own
+melody instead.
 
 **Test the warp without the song.** If you applied the hook, you can also jump
 straight into the scene from any save by adding a debug warp (Enhancements →
@@ -212,24 +224,42 @@ Song: **A, C-Up, C-Down, C-Left, C-Right, A** (D4 D5 F4 B4 A4 D4).
 
 ## 6. Music
 
-Three tracks ship as placeholder `.seq` files (see `music/`), registered as
-custom sequences in the archive:
+**The mod ships with vanilla music only.** `VersasFate.o2r` contains no
+sequences at all, so with it installed every note you hear is a track the game
+already had:
 
-| Archive entry | What it is |
+| Where | What plays |
 |---|---|
-| `custom/music/versasfate/Versas Vine Forest_bgm` | forest theme |
-| `custom/music/versasfate/Versa Gohma_bgm` | boss theme |
-| `custom/music/versasfate/Versas Lullaby_fanfare` | the melody (fanfare slot) |
+| The warp jingle (pads and song) | `NA_BGM_OCA_MINUET` - the vanilla "you played a song" jingle |
+| The forest itself | `NA_BGM_SARIA_THEME` (Lost Woods / Saria's theme), requested by the scene |
+| The boss hollow | vanilla boss music, triggered by the boss actor itself |
+| The Kokiri melody lesson | `NA_BGM_OCA_MINUET` - the same vanilla jingle |
 
-Assign them once per config in the **Audio Editor** (the padlock button
-unlocks it):
+That is deliberate: there is no code path in which this mod hands the audio
+engine a sequence file it wrote. The three tracks it comes with are in a
+**separate, optional** archive:
+
+```
+versas-fate/VersasFate-Music.o2r        940 bytes
+    custom/music/versasfate/Versas Vine Forest_bgm
+    custom/music/versasfate/Versa Gohma_bgm
+    custom/music/versasfate/Versas Lullaby_fanfare
+```
+
+Copy it into `mods/` next to `VersasFate.o2r` **only if you want it**; the mod
+then finds "Versas Lullaby" by name and the lesson uses it, and the other two
+tracks become selectable in the Audio Editor (the padlock button unlocks it):
 
 * Background Music → "Lost Woods" → **Versas Vine Forest**
-* Battle Music → "Battle" → **Versa Gohma** (field scenes switch to the
-  battle slot automatically when enemies are near, which is how the boss
-  arena gets its own theme without any code)
+* Battle Music → "Battle" → **Versa Gohma** (field scenes switch to the battle
+  slot automatically when enemies are near, which is how the boss arena gets its
+  own theme without any code)
 * Fanfares → "Enter Zelda" → **Versas Lullaby** (after the one-line change in
   `patch/soh/soh/VersasFateWarp.cpp` described in `docs/CUSTOM_MUSIC.md`)
+
+No rebuild and no code change is needed to switch between the two: the hook
+looks the melody up by name and falls back to the vanilla jingle when the music
+pack is not installed.
 
 To use your own audio instead of the placeholders:
 
@@ -300,6 +330,7 @@ so you can plan around them.
 | The forest is there but untextured/white | The texture resources did not make it into the archive. Run `python tools\make_textures.py` then `python tools\build_versas_fate.py`; texture entries must be named `<name>` (no format suffix) and match the `Path=` in the display list XML. |
 | Scene loads, then you fall forever | Collision didn't load: check `scenes/shared/versa_scene/versa_collision` is in the archive and that the room XML's `SetCollisionHeader FileName=` matches it. |
 | Wrong song triggers the warp | You are testing with the hook file from an older copy; the shipped one requires the exact six notes in free play. |
+| **The game crashes the moment you warp into the forest** | An XML resource in the archive failed to parse - the engine's loader de-references a null resource when that happens, which is a hard crash, and it happens during scene load, i.e. exactly as the fade starts. `tools/validate_mod.py` exists for this: it parses every resource the way the engine does, and `build_versas_fate.py` refuses to pack anything that fails. The bug that shipped once was a collision header that opened `<CollisionHeader ...>` and closed `</Collision>` - a mismatched tag is enough. Run `python tools\validate_mod.py` (add `--o2r VersasFate.o2r` to check a packed archive) and read `logs/Ship of Harkinian.log` if it still happens. |
 | `python tools\audio_to_seq.py` says ffmpeg was not found | Install ffmpeg (`winget install Gyan.FFmpeg`) or convert to `.wav` yourself first. |
 | Archive is 16 KB but the game says it is corrupt | Something wrote a zero-byte file into the archive; `build_versas_fate.py` refuses to do that, so check you are using it and not a zip tool that stores directories. |
 
@@ -316,7 +347,12 @@ reverse-engineer:
 | The song/warp behaviour | `patch/soh/soh/VersasFateWarp.cpp` | rebuild SoH |
 
 After any change, re-run `python tools\build_versas_fate.py` and copy the `.o2r`
-over the old one; the game picks it up on the next boot.
+over the old one; the game picks it up on the next boot. The build validates
+`mod_src/` first, then `music/`, then the packed archive afterwards
+(`tools/validate_mod.py` and `tools/validate_seq.py`), so a resource or a
+sequence the engine cannot load stops the build instead of reaching the game -
+run `python tools\validate_mod.py --o2r VersasFate.o2r` or
+`python tools\validate_seq.py music\*.seq` on their own to check finished files.
 
 ## 10. Credit and licence
 

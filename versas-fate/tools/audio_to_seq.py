@@ -54,14 +54,24 @@ SEQ_MUTE_VOLUME = 0xD5        # + u8 (scale 0..127)
 SEQ_INIT_CHANNELS = 0xD7      # + s16 channel bitmask; MUST come before Ldchan
 SEQ_VOLUME = 0xDB             # + u8
 SEQ_TEMPO = 0xDD              # + u8 (BPM)
-SEQ_ENABLE_CHANNEL = 0x90     # | channel, + compressed u16 absolute offset
+SEQ_DELAY = 0xFD               # + compressed u16, ticks to wait
+SEQ_ENABLE_CHANNEL = 0x90     # | channel, + s16 absolute offset (PLAIN 16 bit value,
+                              #   read by AudioSeq_ScriptReadS16 - see the 0x90 case in
+                              #   soh/src/code/audio_seqplayer.c, not by
+                              #   AudioSeq_ScriptReadCompressedU16)
 SEQ_DISABLE_CHANNEL = 0x40    # | channel
-SEQ_JUMP = 0xFB               # + s16 absolute offset
+SEQ_JUMP = 0xFB               # + s16 absolute offset (unconditional jump)
+                              # 0xFB is the one working absolute goto: it shares the case in
+                              # AudioSeq_HandleScriptFlowControl with 0xF5/0xF9/0xFA but none of
+                              # their guards match it, and unlike 0xFC it does NOT push a return
+                              # address onto the script stack (0xFC is a "call", and its table
+                              # entry 0x00 means the player never even reads its operand).
 SEQ_END = 0xFF
 
 # channel script
 CH_LEGATO = 0xC4              # largeNotes = true, required by our note encoding
-CH_SET_LAYER = 0x88           # | layer index, + compressed u16 absolute offset
+CH_SET_LAYER = 0x88           # | layer index, + s16 absolute offset (same rule as
+                              #   0x90: AudioSeq_ScriptReadS16, plain 16 bit)
 CH_PAN = 0xDD                 # + u8 (0..127)
 CH_VOLUME = 0xDF              # + u8 (0..127)
 CH_END = 0xFF
@@ -70,7 +80,6 @@ CH_END = 0xFF
 LAYER_SHORT = 0xC4            # continuous notes on (legato)
 LAYER_INSTRUMENT = 0xC6       # + u8 sound font program (instrument)
 LAYER_REST = 0xC0             # + compressed u16 delay (rest / tie)
-LAYER_JUMP = 0xFB             # + s16 absolute offset
 LAYER_END = 0xFF
 
 TATUMS_PER_BEAT = 48          # ticks per beat in the sequence player
@@ -231,14 +240,15 @@ def _s16(value):
     return struct.pack(">H", value & 0xFFFF)
 
 
-def _ptr(value):
-    """Address argument for ldchan / ldlayer, read with
-    AudioSeq_ScriptReadCompressedU16: one byte if the top bit is clear,
-    otherwise 0x80|hi7 followed by the low byte.  Always emitting the two byte
-    form keeps the offsets a fixed width, which makes patching them easy.
-    """
-    value &= 0x7FFF
-    return bytes([0x80 | ((value >> 8) & 0x7F), value & 0xFF])
+# NOTE - there is deliberately no "compressed" pointer writer here.
+#
+# Both 0x90|ch in the root script ("enable this channel, its script is at
+# offset X") and 0x88|layer in a channel script ("this layer's script is at
+# offset X") are read with AudioSeq_ScriptReadS16, i.e. the offset is a PLAIN
+# two byte big endian value. Writing the compressed form (0x80|hi, lo) that
+# note delays use produced, for example, 0x8015 = 32789 as the channel offset
+# of a 62 byte file - the player then ran off the end of the sequence data.
+# An earlier version of this file did exactly that.
 
 
 class Seq64(object):
@@ -253,9 +263,24 @@ class Seq64(object):
                                   volume=volume & 0x7F, gate=gate & 0xFF,
                                   transpose=max(-64, min(63, transpose))))
 
+    def duration_ticks(self):
+        """How long the whole melody lasts, in sequence ticks.
+
+        Every channel of a song has to run for the same length of time (the
+        band splitter pads its channels with rests), so the longest one is
+        the song length.
+        """
+        longest = 0
+        for ch in self.channels:
+            ticks = sum(slices for (_midi, slices, _vel) in ch["runs"]) * TICKS_PER_SLICE
+            longest = max(longest, ticks)
+        return longest
+
     def build(self):
         if not self.channels:
             raise ValueError("sequence has no channels")
+
+        song_ticks = max(1, min(0x7FFF, self.duration_ticks()))
 
         # ---- layers ------------------------------------------------------
         layers = []
@@ -271,7 +296,7 @@ class Seq64(object):
                     layer.extend(_c16(slices * TICKS_PER_SLICE))
                     layer.append(velocity & 0x7F)
                     layer.append(ch["gate"])
-            # loop the melody: jump back to the start of this layer
+            layer.append(LAYER_END)
             layers.append(layer)
 
         # ---- channels ----------------------------------------------------
@@ -280,11 +305,21 @@ class Seq64(object):
             body = bytearray()
             body.append(CH_LEGATO)
             body.append(CH_SET_LAYER | 0)
-            body.extend(b"\x80\x00")           # patched below: layer offset
+            body.extend(b"\x00\x00")           # patched below: layer offset
             body.append(CH_PAN)
             body.append(ch["pan"])
             body.append(CH_VOLUME)
             body.append(ch["volume"])
+            # Hold the channel open for the length of the melody. A channel
+            # script that reaches 0xFF right away makes the player call
+            # AudioSeq_SequenceChannelDisable(), which frees all four of the
+            # channel's layers ("for (i = 0; i < 4; i++) AudioSeq_SeqLayerFree")
+            # and clears its note pool - the melody would be killed the instant
+            # it started. OoT's own writer puts a delay in front of that 0xFF
+            # (AudioSequenceFactory.cpp, WriteMonoSingleSeq), so we do too, and
+            # the root script below re-enables the channel at the same tick.
+            body.append(SEQ_DELAY)
+            body.extend(_c16(song_ticks))
             body.append(CH_END)
             channels.append(body)
 
@@ -298,20 +333,23 @@ class Seq64(object):
         root.append(SEQ_INIT_CHANNELS)
         root.extend(_s16((1 << len(self.channels)) - 1))
 
+        # The loop point is the first ldchan: when the song ends, jumping back
+        # here re-enables every channel from scratch, which in turn re-points
+        # each layer at its note script - exactly the pattern of the looped
+        # sequence in AudioSequenceFactory.cpp::WriteMonoSingleSeq.
+        loop_point = len(root)
         channel_ptr_pos = []
         for i in range(len(self.channels)):
             root.append(SEQ_ENABLE_CHANNEL | i)
             channel_ptr_pos.append(len(root))
-            root.extend(b"\x80\x00")           # patched below: channel offset
+            root.extend(b"\x00\x00")           # patched below: channel offset
         root.append(SEQ_VOLUME)
         root.append(127)
         root.append(SEQ_TEMPO)
         root.append(self.tempo)
-        # Keep the sequence player alive forever: delay, then jump back to the
-        # delay. The channels loop on their own inside their note layer.
-        loop_point = len(root)
-        root.append(0xFD)
-        root.extend(_c16(0x7FFF))
+        # Wait out the song, then go round again, forever.
+        root.append(SEQ_DELAY)
+        root.extend(_c16(song_ticks))
         root.append(SEQ_JUMP)
         root.extend(_s16(loop_point))
         root.append(SEQ_END)
@@ -330,21 +368,20 @@ class Seq64(object):
             pos += len(layer)
 
         for i, p in enumerate(channel_ptr_pos):
-            root[p:p + 2] = _ptr(ch_offsets[i])
+            root[p:p + 2] = _s16(ch_offsets[i])
 
         out = bytearray()
         out.extend(root)
         for idx, body in enumerate(channels):
             # patch the layer pointer inside each channel
-            lp = 3   # 0xC4, 0x88 | layer, then the 2 byte offset
-            body[lp:lp + 2] = _ptr(layer_offsets[idx])
+            lp = 2   # [0]=0xC4, [1]=0x88|layer, [2:4]=the 2 byte plain s16 offset
+            body[lp:lp + 2] = _s16(layer_offsets[idx])
             out.extend(body)
 
-        for idx, layer in enumerate(layers):
-            # append the loop-back jump, now that the layer's own offset is known
-            layer.append(LAYER_JUMP)
-            layer.extend(_s16(layer_offsets[idx]))
-            layer.append(LAYER_END)
+        for layer in layers:
+            # A layer that runs out of notes disables itself; the next root
+            # loop rebuilds it (AudioSeq_SeqChannelSetLayer resets the whole
+            # layer, including its script depth) and plays it again.
             out.extend(layer)
 
         return bytes(out)

@@ -368,7 +368,10 @@ def emit_collision(path, quads):
     lines.append('\t<CameraData SType="1" NumData="1" CameraPosDataSeg="0" />\n')
     lines.append('\t<CameraPositionData PosX="0" PosY="0" PosZ="0" RotX="0" RotY="0" RotZ="0" FOV="60" JfifID="0" '
                  'Unknown="0" />\n')
-    lines.append('</Collision>\n')
+    # The closing tag must match the opening one exactly: the engine parses every
+    # resource with tinyxml2 and treats a mismatched tag as a parse failure, and a
+    # resource that fails to parse is a hard crash when the game asks for it.
+    lines.append('</CollisionHeader>\n')
     write(path, "".join(lines))
 
 
