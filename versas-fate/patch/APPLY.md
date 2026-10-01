@@ -132,6 +132,11 @@ cmake --build build --config Release
    notes on purpose.
 4. The screen should fade to white and you should load into the vine forest.
 
+**Optional:** with the ocarina in your inventory, talk to a Kokiri in Kokiri
+Forest - the first time you do (once per session) the Kokiri sings the melody
+so you can hear it in the game's own instruments. It is a demonstration only:
+the song is never stored and the warp does not depend on it.
+
 If nothing happens:
 
 | Symptom | Check |

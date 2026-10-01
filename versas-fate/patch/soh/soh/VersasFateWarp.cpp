@@ -7,14 +7,18 @@
  * Copy this file to:   <soh>/soh/soh/VersasFateWarp.cpp
  * (then append two lines to the scene/entrance tables - see patch/APPLY.md)
  *
- * It does exactly two things:
+ * It does exactly three things:
  *   1. listens to the notes the player plays on the ocarina (the vanilla
  *      engine only knows its own songs, so a mod's own song has to be
- *      recognised in code), and
+ *      recognised in code),
  *   2. when the six-note melody of "Versa's Lullaby" has just been played,
  *      sends the player through a white fade into the entrance defined by
  *      ENTR_VERSAS_FATE - the entrance you add to
- *      soh/include/tables/entrance_table.h (see patch/APPLY.md).
+ *      soh/include/tables/entrance_table.h (see patch/APPLY.md), and
+ *   3. the first time the player talks to a Kokiri in Kokiri Forest, the
+ *      Kokiri sings the melody - the "an NPC teaches you the song" moment.
+ *      This is flavour only: the song is not stored and the warp does not
+ *      depend on it.
  *
  * Everything else - the scene, the room, the collision, the textures, the
  * music, the actors, the puzzles, the boss - is data inside VersasFate.o2r
@@ -47,12 +51,15 @@
  */
 
 #include "soh/ShipInit.hpp"
+#include "soh/Enhancements/audio/AudioCollection.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
+#include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
 extern "C" {
 #include "functions.h"
 #include "macros.h"
 #include "variables.h"
+#include "z64save.h"
 }
 
 extern "C" PlayState* gPlayState;
@@ -107,6 +114,71 @@ static const u8 sVersasLullaby[] = {
 
 static size_t sVersasLullabyPos = 0;
 static u8 sVersasLullabyLastPitch = OCARINA_PITCH_NONE;
+
+/* ------------------------------------------------------------------------ *
+ * The Kokiri lesson
+ * ------------------------------------------------------------------------ *
+ *
+ * A Kokiri in Kokiri Forest sings the melody for you the first time you talk
+ * to one (with the ocarina in your inventory), once per play session. That is
+ * the "an NPC teaches me the song" moment: the notes are not stored anywhere
+ * and nothing is unlocked - the song works before and after the lesson. It is
+ * flavour, not a gate.
+ *
+ * The melody it sings is the mod's own "Versas Lullaby" sequence out of the
+ * .o2r (looked up by name among the custom sequences the archive registered);
+ * if the archive is not installed it falls back to the vanilla Minuet jingle
+ * rather than staying silent.
+ */
+
+static bool sLessonPending = false;
+static bool sLessonPlayed = false;
+
+/** The sequence id the engine gave the mod's melody, or the Minuet jingle. */
+static u16 VersasFate_LullabySequence(void) {
+    for (const auto& [seqId, info] : AudioCollection::Instance->GetAllSequences()) {
+        if (info.label == "Versas Lullaby") {
+            return seqId;
+        }
+    }
+    return NA_BGM_OCA_MINUET;
+}
+
+/** Notice the player starting to talk to a Kokiri in Kokiri Forest. */
+static void VersasFate_OnActorUpdate(void* actorPtr) {
+    if (sLessonPlayed || sLessonPending || gPlayState == nullptr || !GameInteractor::IsSaveLoaded(true)) {
+        return;
+    }
+    if (gPlayState->sceneNum != SCENE_KOKIRI_FOREST) {
+        return;
+    }
+    // Without the ocarina there is nothing to teach with.
+    if (gSaveContext.inventory.items[SLOT_OCARINA] == ITEM_NONE) {
+        return;
+    }
+
+    Actor* actor = static_cast<Actor*>(actorPtr);
+    if (GET_PLAYER(gPlayState)->talkActor != actor) {
+        return;
+    }
+
+    sLessonPending = true;
+}
+
+/** When that conversation ends, the Kokiri sings the melody. */
+static void VersasFate_OnGameFrameUpdate(void) {
+    if (!sLessonPending || gPlayState == nullptr) {
+        return;
+    }
+    // Wait for the textbox to close so the singing is not buried under it.
+    if (gPlayState->msgCtx.msgMode != MSGMODE_NONE) {
+        return;
+    }
+
+    sLessonPending = false;
+    sLessonPlayed = true;
+    Audio_PlayFanfare(VersasFate_LullabySequence());
+}
 
 /* ------------------------------------------------------------------------ *
  * Warp
@@ -187,6 +259,10 @@ static void VersasFate_OnOcarinaNote(uint8_t pitch, float bendFreq, int8_t instr
 
 static void RegisterVersasFate() {
     COND_HOOK(OnOcarinaNote, true, VersasFate_OnOcarinaNote);
+
+    // The Kokiri lesson: an En_Ko in Kokiri Forest sings the melody once.
+    COND_ID_HOOK(OnActorUpdate, ACTOR_EN_KO, true, VersasFate_OnActorUpdate);
+    COND_HOOK(OnGameFrameUpdate, true, VersasFate_OnGameFrameUpdate);
 }
 
 static RegisterShipInitFunc initFunc(RegisterVersasFate);
