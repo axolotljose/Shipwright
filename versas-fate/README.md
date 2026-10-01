@@ -86,12 +86,14 @@ Then start the game. Useful things to check:
 | In-game audio editor (Enhancements → Audio Editor) | Three new entries: "Versas Vine Forest", "Versa Gohma", "Versas Lullaby" |
 | Playing the song | White fade into the vine forest |
 
-**The Kokiri lesson.** With the ocarina in your inventory, the first time you
-talk to a Kokiri in Kokiri Forest (once per play session) the Kokiri sings the
-melody for you, using the mod's own "Versas Lullaby" sequence from the archive.
-This is a demonstration, not an unlock: nothing is stored, and the song warps
-you before and after it. If the archive is not installed the lesson falls back
-to the vanilla Minuet jingle.
+**The lesson.** With the ocarina in your inventory, the first time you talk to
+**Saria** (Kokiri Forest early on, or Sacred Forest Meadow where she hands you
+the ocarina) she sings the melody for you, using the mod's own "Versas
+Lullaby" sequence from the archive. Any other Kokiri in Kokiri Forest does the
+same, for saves where Saria has moved on. Once per play session. This is a
+demonstration, not an unlock: nothing is stored, and the song warps you before
+and after it. If the archive is not installed the lesson falls back to the
+vanilla Minuet jingle.
 
 **Test the warp without the song.** If you applied the hook, you can also jump
 straight into the scene from any save by adding a debug warp (Enhancements →

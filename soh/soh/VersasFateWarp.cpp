@@ -15,10 +15,11 @@
  *      sends the player through a white fade into the entrance defined by
  *      ENTR_VERSAS_FATE - the entrance you add to
  *      soh/include/tables/entrance_table.h (see patch/APPLY.md), and
- *   3. the first time the player talks to a Kokiri in Kokiri Forest, the
- *      Kokiri sings the melody - the "an NPC teaches you the song" moment.
- *      This is flavour only: the song is not stored and the warp does not
- *      depend on it.
+ *   3. the first time you talk to Saria - in Kokiri Forest early on, or in
+ *      Sacred Forest Meadow where she gives you the ocarina - she sings the
+ *      melody: the "an NPC teaches you the song" moment. Any other Kokiri
+ *      does it in Kokiri Forest, for saves where Saria has moved on. This is
+ *      flavour only: the song is not stored and the warp does not depend on it.
  *
  * Everything else - the scene, the room, the collision, the textures, the
  * music, the actors, the puzzles, the boss - is data inside VersasFate.o2r
@@ -125,6 +126,11 @@ static u8 sVersasLullabyLastPitch = OCARINA_PITCH_NONE;
  * and nothing is unlocked - the song works before and after the lesson. It is
  * flavour, not a gate.
  *
+ * Saria (En_Sa) is the teacher. She is the one who hands you the ocarina, and
+ * she does that in Sacred Forest Meadow, so the lesson is available there as
+ * well as in Kokiri Forest. Every other Kokiri (En_Ko) teaches in Kokiri
+ * Forest, so this still works in save states where Saria has moved on.
+ *
  * The melody it sings is the mod's own "Versas Lullaby" sequence out of the
  * .o2r (looked up by name among the custom sequences the archive registered);
  * if the archive is not installed it falls back to the vanilla Minuet jingle
@@ -144,12 +150,9 @@ static u16 VersasFate_LullabySequence(void) {
     return NA_BGM_OCA_MINUET;
 }
 
-/** Notice the player starting to talk to a Kokiri in Kokiri Forest. */
+/** Notice the player starting to talk to their teacher. */
 static void VersasFate_OnActorUpdate(void* actorPtr) {
     if (sLessonPlayed || sLessonPending || gPlayState == nullptr || !GameInteractor::IsSaveLoaded(true)) {
-        return;
-    }
-    if (gPlayState->sceneNum != SCENE_KOKIRI_FOREST) {
         return;
     }
     // Without the ocarina there is nothing to teach with.
@@ -158,6 +161,21 @@ static void VersasFate_OnActorUpdate(void* actorPtr) {
     }
 
     Actor* actor = static_cast<Actor*>(actorPtr);
+
+    // Saria teaches wherever she can be talked to (Kokiri Forest early on,
+    // Sacred Forest Meadow - where she hands over the ocarina - afterwards).
+    // Every other Kokiri teaches in Kokiri Forest, for saves where she is not
+    // around any more.
+    const bool isSaria = (actor->id == ACTOR_EN_SA);
+    const bool isOtherKokiri = (actor->id == ACTOR_EN_KO);
+
+    const bool placeIsRight =
+        isSaria ? (gPlayState->sceneNum == SCENE_KOKIRI_FOREST || gPlayState->sceneNum == SCENE_SACRED_FOREST_MEADOW)
+                : (isOtherKokiri && gPlayState->sceneNum == SCENE_KOKIRI_FOREST);
+    if (!placeIsRight) {
+        return;
+    }
+
     if (GET_PLAYER(gPlayState)->talkActor != actor) {
         return;
     }
@@ -260,7 +278,9 @@ static void VersasFate_OnOcarinaNote(uint8_t pitch, float bendFreq, int8_t instr
 static void RegisterVersasFate() {
     COND_HOOK(OnOcarinaNote, true, VersasFate_OnOcarinaNote);
 
-    // The Kokiri lesson: an En_Ko in Kokiri Forest sings the melody once.
+    // The lesson: Saria in Kokiri Forest sings the melody - and any other
+    // Kokiri does too, for saves where Saria has moved on.
+    COND_ID_HOOK(OnActorUpdate, ACTOR_EN_SA, true, VersasFate_OnActorUpdate);
     COND_ID_HOOK(OnActorUpdate, ACTOR_EN_KO, true, VersasFate_OnActorUpdate);
     COND_HOOK(OnGameFrameUpdate, true, VersasFate_OnGameFrameUpdate);
 }
