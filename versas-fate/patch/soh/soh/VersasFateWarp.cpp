@@ -36,6 +36,13 @@
  */
 
 #include "soh/ShipInit.hpp"
+// OPEN_DISPS/CLOSE_DISPS (macros.h) declare the FrameInterpolation_* functions
+// at *block scope*, which only binds them to their real C linkage when a
+// declaration with C linkage is already visible. Without this include the
+// compiler emits C++-mangled references and the link fails with
+// "unresolved external symbol FrameInterpolation_RecordOpenChild" - which is
+// exactly how the first CI build of the pad drawing died, at 1716/1717.
+#include "soh/frame_interpolation.h"
 #include "soh/Enhancements/audio/AudioCollection.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
