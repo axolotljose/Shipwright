@@ -198,7 +198,7 @@ echo.
 echo   Fix: download the complete package instead, which has them
 echo   inside, then double-click build_it.bat in that one:
 echo.
-echo   https://github.com/axolotljose/Shipwright/releases/download/versas-fate-build/Shipwright-VersasFate-with-dependencies.zip
+echo   https://github.com/axolotljose/Shipwright/raw/arena/01a0f751-shipwright/versas-fate/download/Shipwright-VersasFate-with-dependencies.zip
 echo.
 echo   (If you have git installed, cloning with
 echo    "git clone --recurse-submodules" also fixes it.)
