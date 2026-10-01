@@ -12,7 +12,7 @@ jobs:
     steps:
     - name: Resolve distro images
       id: set-matrix
-      uses: actions/github-script@v9
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       with:
         script: |
           const today = new Date().toISOString().slice(0, 10);
@@ -78,7 +78,7 @@ jobs:
           pacman) pacman -Sy --noconfirm git ;;
           zypper) zypper --non-interactive in git ;;
         esac
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         submodules: true
     - name: Install dependencies (pacman)
@@ -192,10 +192,10 @@ jobs:
   build-nix:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         submodules: true
-    - uses: cachix/install-nix-action@v31
+    - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
     - name: Build SoH in nix dev shell
       run: |
         nix develop ./linux-build-deps -c bash -c '
