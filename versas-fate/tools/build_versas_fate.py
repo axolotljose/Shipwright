@@ -260,6 +260,13 @@ def collect_music(entries):
               % (arc, spec["file"], len(seq), int(settings.get("font", 0))))
 
 
+# Fixed timestamp for every zip entry: zip stores a DOS date/time per file, so
+# without this two builds of identical inputs would produce different bytes.
+# The mod never reads it; it only makes the build reproducible so a committed
+# .o2r can be verified against a fresh build (see VERIFY below).
+ZIP_DATE_TIME = (2025, 1, 1, 0, 0, 0)
+
+
 def write_archive(entries, out_path):
     tmp = out_path + ".tmp"
     with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
@@ -267,8 +274,14 @@ def write_archive(entries, out_path):
             data = entries[name]
             if not data:
                 raise SystemExit("refusing to write empty archive entry: %s" % name)
-            z.writestr(name, data)
-        z.writestr("portVersion", port_version_entry())
+            info = zipfile.ZipInfo(name, date_time=ZIP_DATE_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            z.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+        info = zipfile.ZipInfo("portVersion", date_time=ZIP_DATE_TIME)
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o644 << 16
+        z.writestr(info, port_version_entry(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
     if os.path.exists(out_path):
         os.remove(out_path)
     os.rename(tmp, out_path)
