@@ -146,8 +146,8 @@ echo  Mod installed: %EXEDIR%mods\VersasFate.o2r
 
 if not exist "%EXEDIR%oot.o2r" (
     for /f "delims=" %%F in ('dir /s /b "%ROOT%\oot.o2r" 2^>nul') do (
-        if not exist "%%~dpAmods" mkdir "%%~dpAmods"
-        copy /y "%MODSRC%" "%%~dpAmods\VersasFate.o2r" >nul
+        if not exist "%%~dpFmods" mkdir "%%~dpFmods"
+        copy /y "%MODSRC%" "%%~dpFmods\VersasFate.o2r" >nul
         echo  Mod also installed next to: %%F
     )
 )
