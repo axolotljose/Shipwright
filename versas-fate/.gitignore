@@ -5,3 +5,6 @@
 # the source textures the archive is built from.
 !VersasFate.o2r
 !mod_src/textures/**/*.png
+
+# Generated practice audio (tools/preview_lullaby.py) - regenerable, ~900 KB
+music/*_preview.wav
