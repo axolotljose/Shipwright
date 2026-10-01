@@ -11,7 +11,27 @@ This folder is a complete, self-contained project: build the archive, copy it
 into `mods/`, play. Everything here runs on Windows with a stock Python 3.9+
 and no `pip install`.
 
-## 0. Windows: the one download that actually builds
+## 0a. Windows: download a build that is already made (easiest)
+
+GitHub builds this branch on `windows-latest` for every push, and publishes the
+finished game - `soh.exe`, the assets, **and `mods/VersasFate.o2r` already
+installed** - as a downloadable artifact. Nothing to install, no compiler, no
+Visual Studio.
+
+1. Open **https://github.com/axolotljose/Shipwright/actions/workflows/generate-builds.yml**
+   (log in to GitHub - it is your own repo).
+2. Click the newest run with a green tick, scroll to the bottom and download
+   **`soh-windows`**.
+3. Unzip it anywhere and run `soh.exe`. Pick your own ROM when asked. The mod
+   is already in `mods/`.
+
+No account-friendly mirror, if you would rather not log in:
+**https://nightly.link/axolotljose/Shipwright/workflows/generate-builds.yml/arena/01a0f751-shipwright**
+
+If the newest run is red, use 0b below instead: `build_it.bat` builds the same
+thing on your own PC.
+
+## 0b. Windows: the download you compile yourself
 
 **Do not use GitHub's green "Code -> Download ZIP" button on this repo.** It
 leaves the `libultraship/` and `torch/` submodules empty, so CMake stops during
@@ -33,6 +53,14 @@ Grab this instead - it is the whole project *with* both dependencies inside
 
 If you prefer git, `git clone --recurse-submodules` works too; the bat script
 will also tell you if the dependencies are missing.
+
+`build_it.bat` needs **Visual Studio 2022 with the "Desktop development with
+C++" workload** (the free Build Tools are enough). It checks for it before it
+starts and tells you exactly what to tick if it is missing - that check is
+there because "The C compiler identification is unknown" is what CMake says
+when the C++ workload is not installed. Everything CMake prints is also written
+to `build_it.log` next to the script, so a failure can be read afterwards
+instead of scrolling away.
 
 > Reminder: the vine pads, the song and the Saria lesson live in the C++
 > patch, so they only exist in the build produced by `build_it.bat`. Copying

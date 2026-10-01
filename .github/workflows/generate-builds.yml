@@ -230,11 +230,39 @@ jobs:
       run: |
         set $env:PATH="$env:USERPROFILE/.cargo/bin;$env:PATH"
         cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_REMOTE_CONTROL=1
-        cmake --build build-windows --config Release --parallel 10
+        # Tee the build output to a file: if a compile fails, the step below
+        # reports the error instead of leaving a green-tick-with-exit-code-1.
+        cmake --build build-windows --config Release --parallel 10 2>&1 | Tee-Object -FilePath build-windows.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         (cd build-windows && cpack)
         cd ..
         mv _packages/*.zip _packages/soh-windows.zip
+    - name: Report the compile errors
+      if: failure()
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        if (-not (Test-Path build-windows.log)) { exit 0 }
+        $lines = Get-Content build-windows.log
+        $errors = $lines | Select-String -Pattern 'error C[0-9]|fatal error|error MSB|CMake Error' | Select-Object -Last 30
+        $body = @()
+        $body += 'The Windows build failed. Last lines of the log:'
+        $body += '```'
+        $body += ($lines | Select-Object -Last 40)
+        $body += '```'
+        if ($errors) {
+          $body += 'Compiler errors:'
+          $body += '```'
+          $body += ($errors | ForEach-Object { $_.Line })
+          $body += '```'
+        }
+        $body -join "`n" | Out-File -FilePath build-fail.md -Encoding utf8
+        $body -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+        $pr = gh pr list --head $env:GITHUB_REF_NAME --state open --json number --jq '.[0].number'
+        if ($pr) { gh pr comment $pr --body-file build-fail.md }
+
     - name: Unzip package
       run: Expand-Archive -Path _packages/soh-windows.zip -DestinationPath soh-windows
     - name: Install the Versa's Fate mod into the package

@@ -124,6 +124,19 @@ static constexpr f32 VF_PAD_FOLLOW_RADIUS = 300.0f;
 static constexpr f32 VF_DEG_TO_RAD = 3.14159265358979f / 180.0f;
 static constexpr f32 VF_YAW_TO_RAD = 3.14159265358979f / 32768.0f;
 
+/**
+ * Two things gbi.h does not provide, taken from the port's own collision
+ * viewer (soh/soh/Enhancements/debugger/colViewer.cpp): a flat "primitive
+ * colour" combine mode, and a helper that builds a Vtx with explicit normals
+ * and alpha. Both are used for the pad mosaic below.
+ */
+#define VF_CC_PRIMITIVE_ENVA 0, 0, 0, PRIMITIVE, 0, 0, 0, ENVIRONMENT
+#define vfSPDefVtx(x, y, z, s, t, nx, ny, nz, ca)                                             \
+    {                                                                                         \
+        .n = { .ob = { x, y, z }, .tc = { (int16_t)((s) * 0x0020), (int16_t)((t) * 0x0020) }, \
+               .n = { nx, ny, nz }, .a = ca }                                                 \
+    }
+
 struct VersasFatePad {
     s16 scene;
     const char* name;
@@ -370,19 +383,19 @@ static void VersasFate_BuildPadVerts(void) {
     sPadVtx.reserve(1 + (kSegments * 2) + (kSegments / 2));
 
     // Centre, then the two rings, then one leaf tip between every second pair.
-    sPadVtx.push_back(gdSPDefVtxN(static_cast<short>(lroundf(sPadPos.x)), static_cast<short>(lroundf(y)),
+    sPadVtx.push_back(vfSPDefVtx(static_cast<short>(lroundf(sPadPos.x)), static_cast<short>(lroundf(y)),
                                   static_cast<short>(lroundf(sPadPos.z)), 0, 0, 0, 127, 0, 0xFF));
 
     for (s32 i = 0; i < kSegments; i++) {
         const f32 angle = static_cast<f32>(i) * (360.0f / static_cast<f32>(kSegments)) * VF_DEG_TO_RAD;
-        sPadVtx.push_back(gdSPDefVtxN(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_INNER_RADIUS))),
+        sPadVtx.push_back(vfSPDefVtx(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_INNER_RADIUS))),
                                       static_cast<short>(lroundf(y)),
                                       static_cast<short>(lroundf(sPadPos.z + (sinf(angle) * VF_PAD_INNER_RADIUS))), 0, 0,
                                       0, 127, 0, 0xFF));
     }
     for (s32 i = 0; i < kSegments; i++) {
         const f32 angle = static_cast<f32>(i) * (360.0f / static_cast<f32>(kSegments)) * VF_DEG_TO_RAD;
-        sPadVtx.push_back(gdSPDefVtxN(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_OUTER_RADIUS))),
+        sPadVtx.push_back(vfSPDefVtx(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_OUTER_RADIUS))),
                                       static_cast<short>(lroundf(y)),
                                       static_cast<short>(lroundf(sPadPos.z + (sinf(angle) * VF_PAD_OUTER_RADIUS))), 0, 0,
                                       0, 127, 0, 0xFF));
@@ -390,7 +403,7 @@ static void VersasFate_BuildPadVerts(void) {
     for (s32 i = 0; i < kSegments / 2; i++) {
         const f32 angle =
             (15.0f + (static_cast<f32>(i) * (720.0f / static_cast<f32>(kSegments)))) * VF_DEG_TO_RAD;
-        sPadVtx.push_back(gdSPDefVtxN(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_LEAF_RADIUS))),
+        sPadVtx.push_back(vfSPDefVtx(static_cast<short>(lroundf(sPadPos.x + (cosf(angle) * VF_PAD_LEAF_RADIUS))),
                                       static_cast<short>(lroundf(y)),
                                       static_cast<short>(lroundf(sPadPos.z + (sinf(angle) * VF_PAD_LEAF_RADIUS))), 0, 0,
                                       0, 127, 0, 0xFF));
@@ -424,7 +437,7 @@ static void VersasFate_DrawPad(void) {
     sPadGfx.push_back(gsDPSetCycleType(G_CYC_1CYCLE));
     sPadGfx.push_back(gsDPSetRenderMode(renderMode | GBL_c1(G_BL_CLR_IN, G_BL_0, G_BL_CLR_IN, G_BL_1),
                                         renderMode | GBL_c2(G_BL_CLR_IN, G_BL_0, G_BL_CLR_IN, G_BL_1)));
-    sPadGfx.push_back(gsDPSetCombineMode(G_CC_PRIMITIVE_ENVA, G_CC_PRIMITIVE_ENVA));
+    sPadGfx.push_back(gsDPSetCombineMode(VF_CC_PRIMITIVE_ENVA, VF_CC_PRIMITIVE_ENVA));
     sPadGfx.push_back(gsSPLoadGeometryMode(G_ZBUFFER));
     sPadGfx.push_back(gsDPSetEnvColor(0xFF, 0xFF, 0xFF, 0xFF));
     sPadGfx.push_back(gsSPMatrix(&gMtxClear, G_MTX_MODELVIEW | G_MTX_LOAD | G_MTX_NOPUSH));
